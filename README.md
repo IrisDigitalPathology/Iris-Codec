@@ -1,24 +1,32 @@
 # Iris Codec Community Module
 
 Copyright &copy; 2025 Iris Developers; MIT Software License
+> [!WARNING]
+>  The Iris Codec module is still in active development. We do not anticipate altering the established API functions in the [header files](https://github.com/IrisDigitalPathology/Iris-Headers) but as we add in new features, some elements of the API may change slightly. Please check in regularly if you intend to update your dynamically linked libraries to ensure no API breaking changes have been merged. 
 
-The Iris Codec Community module is a part of the Iris Digital Pathology project. This module allows for the reading and writing of Iris whole slide image (WSI) digital slide files (*.iris*) and allows for the decoding of Iris Codec-type compressed tile image data. This repository was designed to allow for extremely fast slide access using what we consider a very simple API as we want to simplify access to these files for you. It may downloaded as pre-compiled binaries in the [releases tab](https://github.com/IrisDigitalPathology/Iris-Codec/releases), or [may be built](README.md#c-and-c-implementations) as a static or dynamically linked C++ library or [python modules](README.md#python). We have additionally provided these python modules in prebuilt releases on the Anaconda [Conda-Forge](https://conda-forge.org) Python package manager.
+
+The Iris Codec Community module is a part of the Iris Digital Pathology project. This module allows for:
+- Reading and writing of Iris whole slide image (WSI) digital slide files (*.iris*) and 
+- Decoding Iris Codec-type compressed tile image data. 
+
+This repository was designed to allow for extremely fast slide access using a simple API. We want to simplify access to these files for you. This module [may be installed](README.md#installation) in the following forms:
+- Pre-compiled binaries in the [releases tab](https://github.com/IrisDigitalPathology/Iris-Codec/releases),
+- Source files with [CMake build scripts](README.md#c-and-c-implementations).
+- Prebuilt python modules are avilable via [Python package managers](README.md#python).
+
+This module has reliatively limited dependencies. As our encoder builds shift away from using OpenSlide, we will add additional library dependencies for reading vendor files. 
 
 > [!NOTE]
 > **If you are a scanning device manufacturer or programmer developing a custom encoder/decoder, the [Iris File Extension (IFE) repository](https://github.com/IrisDigitalPathology/Iris-File-Extension) will provide the necessary calls to read, write, and validate slide files in accordance with the Iris File Extension Specification.** The current repository (Iris Codec Module) applies higher level abstractions for slide access and incorporates image codecs for image compression. The IFE repository does not. It is limited to (de)serialization and validation. The Iris Codec Module incorporates the [IFE repository](https://github.com/IrisDigitalPathology/Iris-File-Extension) as a dependency, so if you use the IFE respository instead, the Iris Codec module source files may be a helpful guide in how we choose to read and write to Iris files using the IFE's API.
 
-> [!WARNING]
->  The Iris Codec module is still in active development. We do not anticipate altering the established API functions in the [header files](https://github.com/IrisDigitalPathology/Iris-Headers) but as we add in new features, some elements of the API may change slightly. Please check in regularly if you intend to update your dynamically linked libraries to ensure no API breaking changes have been merged. 
-
-This module has reliatively limited dependencies. As our encoder builds shift away from using OpenSlide, we will add additional library dependencies for reading vendor files. 
-- [Iris File Extension](https://github.com/IrisDigitalPathology/Iris-File-Extension)
-- [Libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo)
-- [Libavif](https://github.com/AOMediaCodec/libavif)
-- [OpenSlide](https://github.com/openslide/openslide) (*optional*, encoder-only) <p>*Note: We may remove this dependency in future releases of the encoder. At the present, this limits Windows encoder builds to x86_64 only. You must disable openslide for ARM based windows encoder builds.*
-
 *If you are a software engineer looking to help with Iris, we are always looking for additional passionate engineers to help in developing the Iris Project.*
 
 # Installation
+The Iris Codec Community module is available
+- [Building From Source](README.md#building-from-source)
+- [Python Package Managers](README.md#python)
+- [JavaScript WASM Module](README.md#javascript)
+
 ## Building From Source
 
 This library can be built from source using CMake. 
@@ -45,22 +53,48 @@ cmake --build ./Iris-Codec/build --config Release -j$CPU_COUNT
 cmake --install ./Iris-Codec/build
 ```
 ## Python
+Iris Codec is available via the Anaconda and PyPi package managers. We prefer the Anaconda enviornment as it includes dynamic libraries if you choose to develop C/C++ applications with Python bindings that dynamically link the C++ Iris-Codec in addition to Python modules. 
 
-| Status | Name | Downloads | Version |
-| --- | --- | --- | --- | 
-| [![Conda-Build](https://dev.azure.com/conda-forge/feedstock-builds/_apis/build/status/Iris-Codec-feedstock?branchName=main)](https://dev.azure.com/conda-forge/feedstock-builds/_build/latest?definitionId=25325&branchName=main)| [![Conda Recipe](https://img.shields.io/badge/recipe-iris--codec-green.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) | 
+>[!NOTE] In addition to the below package managers, The Python module may also be built from source by setting `-DIRIS_BUILD_PYTHON=ON` in the above [CMake command](README.md#building-from-source).
 
-Supported Python Platforms\
+
+### Anaconda (Conda-Forge)
+[![Static Badge](https://img.shields.io/badge/Feedstock-Iris_Codec-blue)
+](https://anaconda.org/conda-forge/iris-codec) 
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) 
+[![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) 
 [![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec)
 
->[!NOTE]
-> The python Iris Codec Encoder does not support OpenSlide on Windows presently as OpenSlide does not support windows with its official Conda-Forge package. We are building in native support for vendor files and DICOM for re-encoding.
-
-Iris Codec is also available as a Python conda package on the Conda-Forge Anaconda package manager channel. The corresponding python module may also be built from source by setting `-DIRIS_BUILD_PYTHON=ON` in the above CMake command if you would rather build the module rather than install it via Anaconda. 
-
+You may configure your conda enviornment in the following way
+```shell
+conda config --add channels conda-forge
+conda install iris-codec
+```
+Or directly install it in a single command
 
 ```shell
 conda install -c conda-forge Iris-Codec 
+```
+
+or install it with `mamba`:
+```shell
+mamba install iris-codec
+```
+
+>[!NOTE]
+> The python Conda Forge Encoder does not support OpenSlide on Windows presently as OpenSlide does not support windows with its official Conda-Forge package. We are building in native support for vendor files and DICOM for re-encoding. 
+
+### Pip (PyPi)
+[![PyPI - Version](https://img.shields.io/pypi/v/Iris-Codec?color=blue)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Status](https://img.shields.io/pypi/status/iris-codec)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/Iris-Codec)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Format](https://img.shields.io/pypi/format/iris-codec)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/iris-codec)](https://pypi.org/project/Iris-Codec/)
+
+Iris Codec can also be installed via Pip. The Encoder module dynamically links against OpenSlide to re-encode vendor slide files. This may be removed in the future, but it must be installed presently.
+
+```shell
+pip install iris-codec openslide-bin
 ```
 
 ## Javascript
@@ -69,7 +103,13 @@ conda install -c conda-forge Iris-Codec
 The [Iris-Codec-JavaScript repository](https://github.com/IrisDigitalPathology/Iris-Codec-JavaScript) contains the WebAssembly (WASM) build of the Iris Codec library, allowing it to be used in web browsers and Node.js applications. This implementation does not have the same dependencies, as image decoding is performed in the browser with JavaScript native codec tools. 
 
 # Implementations
-## C++
+We provide introduction implementation examples for the following languages below:
+- [C++ Example API](README.md#c-example-api)
+- [Python Example API](README.md#python-example-api)
+
+Please refer to the Iris Codec API documentation for a more through explaination.
+
+## C++ Example API
 Iris is natively a C++ program and the majority of features will first be supported in C++ followed by the other language bindings as we find time to write the bindings. 
 
 Begin by importing the [Iris Codec Core header](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp); it contains references to the [Iris Codec specific type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecTypes.hpp) as well as the general [Iris Core type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp). You may chose to perform your own file system validations and recovery routines. Iris will, however catch all of these as the main API methods are declared `noexcept`. Should an runtime error occur, it will be reported in the form of an `IrisResult` message, as seen in the `IrisResult validate_slide (const SlideOpenInfo&) noexcept;` call below. Successful loading of a slide file will return a valid `IrisCodec::Slide` object; failure will return a `nullptr`. 
@@ -91,7 +131,8 @@ int main(int argc, char const *argv[])
     }
 
     // You can quickly check if the header starts with Iris
-    // file extension signatures. If not, that's fine too.
+    // file extension signatures. 
+    // If you do not perform this check, that's fine too.
     // Iris will catch it during validation.
     if (!is_iris_codec_file(file_path.string())) {
         printf(file_path.string() + " is not a valid Iris slide file\n");
@@ -156,46 +197,58 @@ if (optional_buffer) free (optional_buffer);
 ```
 Decompressed slide data can be optionally read into preallocated memory. If the optional destination buffer is insufficiently sized, Iris will instead allocate a new buffer and return that new buffer with the pixel data. The `Iris::Buffer` should weakly reference the underlying memory as strongly referenced `Iris::Buffer` objects free underlying memory on deletion.
 ```cpp
-char* some_GPU_upload_buffer;
-size_t tile_byte_offset;
-char* destination = some_GPU_upload_buffer + tile_byte_offest;
-size_t tile_bytes = 256*256*4;
-Iris::Buffer wrapper = Wrap_weak_buffer_fom_data (destination, tile_bytes);
+// In this example we have some preallocated buffer we want
+// to write our slide pixel data into. A GPU buffer is a great
+// example and the GPU API manages that memory:
+char* GPU_DST;
+
+// We will write in R8G8B8A8 format for simplicity
+Iris::Format format = Iris::FORMAT_R8G8B8A8;
+size_t tile_bytes   = 256*256*4; 
+Iris::Buffer wrapper = Wrap_weak_buffer_fom_data (GPU_DST, tile_bytes);
+
+// Read the data
 struct SlideTileReadInfo read_info {
     .slide                  = slide,
-    .optionalDestination    = NULL, /*wrapper can go here*/
-    .desiredFormat          = Iris::FORMAT_R8G8B8A8,
+    .optionalDestination    = wrapper,
+    .desiredFormat          = format,
 };
 Buffer result = read_slide_tile (read_info);
-if (weak_wrapper != result) {
-    printf ("Insufficient sized buffer provided");
+
+// If there was insufficient space in the provided
+// destination buffer, a new buffer will be allocated.
+if (wrapper != result) {
+    printf ("Insufficient sized buffer, new buffer was allocated");
 }
 ```
 
 
-## Python
+## Python Example API
+
+Import the Python API and Iris Codec Module.
+
 ```python
 #Import the Iris Codec Module
 from Iris import Codec
 slide_path = 'path/to/slide_file.iris'
+```
 
-# Perform a deep validation of the slide file structure
-# This will navigate the internal offset-chain and
-# check for violations of the IFE standard.
+Perform a deep validation of the slide file structure. This will navigate the internal offset-chain and check for violations of the IFE standard.
+```python
 result = Codec.validate_slide_path(slide_path)
 if (result.success() == False):
     raise Exception(f'Invalid slide file path: {result.message()}')
 print(f"Slide file '{slide_path}' successfully passed validation")
+```
 
-# Open a slide file
+Open the a slide file. The following conditional will always return True if the slide has already passed validation but you may skip validation and it will return with a null slide object (but without providing the Result debug info).
+```python
 slide = Codec.open_slide(slide_path)
-
-# The following conditional will return True in this instance
-# as the slide has already passed validation;
-# We simply include it as an example of how to check the slide
-if (not slide):
-    raise Exception(f'Invalid slide file path: {result.message()}')
-
+if (not slide): 
+    raise Exception('Failed to open slide file')
+```
+Get the slide abstraction, read off the slide dimensions, and then print it to the console.  
+```py
 # Get the slide abstraction
 result, info = slide.get_info()
 if (result.success() == False):
@@ -207,8 +260,10 @@ print(f"Slide file {extent.width} px by {extent.height}px with an encoding of {i
 print(f'There are {len(extent.layers)} layers comprising the following dimensions:')
 for i, layer in enumerate(extent.layers):
     print(f' Layer {i}: {layer.x_tiles} x-tiles, {layer.y_tiles} y-tiles, {layer.scale:0.0f}x scale')
+```
 
-# Generate a quick view of a slide tile in the middle of the slide using matplotlib imshow function
+Generate a quick view of a slide tile in the middle of the slide using matplotlib imshow function.
+```py
 import matplotlib.pyplot as plt
 layer_index = 0
 x_index = int(extent.layers[layer_index].x_tiles/2)
@@ -217,5 +272,22 @@ tile_index = extent.layers[layer_index].x_tiles * y_index + x_index
 fig = plt.figure()
 plt.imshow(slide.read_slide_tile(layer_index,tile_index), interpolation='none')
 plt.show()
+```
+>[!CAUTION] If you want to full layer images of higher-res layers, do not use MatPlotLib! Use an alternative like Pillow. MatPlotLib is familiar to most data-scientists. It cannot handle rendering the amount of image data produced by full higher-resolution layers.
 
+Or generate a full layer image.
+```py
+
+fig = plt.figure()
+layer_extent = extent.layers[0]
+for y in range(layer_extent.y_tiles):
+  for x in range (layer_extent.x_tiles):
+    tile_index = y*layer_extent.x_tiles+x
+    plt.subplot(layer_extent.y_tiles,layer_extent.x_tiles,tile_index+1)
+    plt.imshow(slide.read_slide_tile(0,tile_index), interpolation='none')
+    plt.xticks([])
+    plt.yticks([])
+    plt.title(f'{tile_index}', y=0.5)
+plt.subplots_adjust(wspace=0.0, hspace=0.0)
+plt.show()
 ```
