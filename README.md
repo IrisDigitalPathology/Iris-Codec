@@ -31,10 +31,10 @@ The Iris Codec Community module is available
 
 This library can be built from source using CMake. 
 
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-macos-CI.yml?style=for-the-badge&label=MacOS%20CMake%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)\
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-linux-CI.yml?style=for-the-badge&label=Ubuntu%20CMake%20CI)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-macos-CI.yml?style=for-the-badge&logo=github&label=MacOS%20CMake%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)\
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-linux-CI.yml?style=for-the-badge&logo=github&label=Ubuntu%20CMake%20CI)
 ](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)\
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-win64-CI.yml?style=for-the-badge&logoSize=200&label=Windows%20CMake%20CI)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-win64-CI.yml?style=for-the-badge&logo=github&label=Windows%20CMake%20CI)
 ](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
 
 The following shell commands clone and build the repository. Remember to `-DCMAKE_INSTALL_PREFIX` your chosen install directory if not installing system-wide. Additionally, Iris Codec CMake script is designed to look for and dynamically link [turbo-jpeg](https://github.com/libjpeg-turbo/libjpeg-turbo) and [AVIF](https://github.com/AOMediaCodec/libavif) by default; however, some implementations would rather simply build a self-contained statically linked binary without the need to dynamically load libraries. **In some instances where reliablity is key, this may be the most secure option.** Some architectures, such as iOS require this. To enable static dependency linkage, instead set `-DIRIS_BUILD_DEPENDENCIES=ON`. More info on the dependencies lookup and **cross compiling** Iris Codec in the [cmake directory](./cmake/).
@@ -264,32 +264,18 @@ for i, layer in enumerate(extent.layers):
     print(f' Layer {i}: {layer.x_tiles} x-tiles, {layer.y_tiles} y-tiles, {layer.scale:0.0f}x scale')
 ```
 
-Generate a quick view of a slide tile in the middle of the slide using matplotlib imshow function.
+Generate a quick low-power view of the slide using Pillow images.
 ```py
-import matplotlib.pyplot as plt
-layer_index = 0
-x_index = int(extent.layers[layer_index].x_tiles/2)
-y_index = int(extent.layers[layer_index].y_tiles/2)
-tile_index = extent.layers[layer_index].x_tiles * y_index + x_index
-fig = plt.figure()
-plt.imshow(slide.read_slide_tile(layer_index,tile_index), interpolation='none')
-plt.show()
-```
->[!WARNING] If you want to full layer images of higher-res layers, do not use MatPlotLib! Use an alternative like Pillow. MatPlotLib is familiar to most data-scientists. It cannot handle rendering the amount of image data produced by full higher-resolution layers.
-
-Or generate a full layer image.
-```py
-import matplotlib.pyplot as plt
-fig = plt.figure()
-layer_extent = extent.layers[0]
+from PIL import Image
+layer_index = 0 # Lowest power layer is layer zero (0)
+scale = int(extent.layers[layer_index].scale)
+composite = Image.new('RGBA',(extent.width * scale, extent.height * scale))
+layer_extent = extent.layers[layer_index]
 for y in range(layer_extent.y_tiles):
   for x in range (layer_extent.x_tiles):
     tile_index = y*layer_extent.x_tiles+x
-    plt.subplot(layer_extent.y_tiles,layer_extent.x_tiles,tile_index+1)
-    plt.imshow(slide.read_slide_tile(0,tile_index), interpolation='none')
-    plt.xticks([])
-    plt.yticks([])
-    plt.title(f'{tile_index}', y=0.5)
-plt.subplots_adjust(wspace=0.0, hspace=0.0)
-plt.show()
+    composite.paste(Image.fromarray(slide.read_slide_tile(layer_index, tile_index)),(256*x,256*y))
+composite.show()
 ```
+>[!CAUTION]
+>Despite Iris' native high read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images.
