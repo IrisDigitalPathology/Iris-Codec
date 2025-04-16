@@ -9,7 +9,7 @@ name = "Iris-Codec"
 version = "2025.1.0a3" 
 
 description = "Portable and blazingly fast whole slide image compression and serialization library for the Iris File Extension"
-readme = "README.md"
+readme = "./python/README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 keywords = ["Iris", "pathology", "digital pathology", "whole slide image", "digital slide"]

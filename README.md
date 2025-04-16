@@ -31,9 +31,11 @@ The Iris Codec Community module is available
 
 This library can be built from source using CMake. 
 
-[![Iris Codec CMake macOS CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)\
-[![Iris Codec Linux CMake CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)\
-[![Iris Codec Windows CMake CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-macos-CI.yml?style=for-the-badge&label=MacOS%20CMake%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)\
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-linux-CI.yml?style=for-the-badge&label=Ubuntu%20CMake%20CI)
+](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)\
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-win64-CI.yml?style=for-the-badge&logoSize=200&label=Windows%20CMake%20CI)
+](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
 
 The following shell commands clone and build the repository. Remember to `-DCMAKE_INSTALL_PREFIX` your chosen install directory if not installing system-wide. Additionally, Iris Codec CMake script is designed to look for and dynamically link [turbo-jpeg](https://github.com/libjpeg-turbo/libjpeg-turbo) and [AVIF](https://github.com/AOMediaCodec/libavif) by default; however, some implementations would rather simply build a self-contained statically linked binary without the need to dynamically load libraries. **In some instances where reliablity is key, this may be the most secure option.** Some architectures, such as iOS require this. To enable static dependency linkage, instead set `-DIRIS_BUILD_DEPENDENCIES=ON`. More info on the dependencies lookup and **cross compiling** Iris Codec in the [cmake directory](./cmake/).
 
@@ -59,11 +61,11 @@ Iris Codec is available via the Anaconda and PyPi package managers. We prefer th
 
 
 ### Anaconda (Conda-Forge)
-[![Static Badge](https://img.shields.io/badge/Feedstock-Iris_Codec-blue)
-](https://anaconda.org/conda-forge/iris-codec) 
-[![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) 
-[![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) 
-[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec)
+[![Static Badge](https://img.shields.io/badge/Feedstock-Iris_Codec-g?style=for-the-badge)
+](https://github.com/conda-forge/Iris-Codec-feedstock) 
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
+[![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
+[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec)
 
 You may configure your conda enviornment in the following way
 ```shell
@@ -85,11 +87,11 @@ mamba install iris-codec
 > The python Conda Forge Encoder does not support OpenSlide on Windows presently as OpenSlide does not support windows with its official Conda-Forge package. We are building in native support for vendor files and DICOM for re-encoding. 
 
 ### Pip (PyPi)
-[![PyPI - Version](https://img.shields.io/pypi/v/Iris-Codec?color=blue)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Status](https://img.shields.io/pypi/status/iris-codec)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/Iris-Codec)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Format](https://img.shields.io/pypi/format/iris-codec)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/iris-codec)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Version](https://img.shields.io/pypi/v/Iris-Codec?color=blue&style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Status](https://img.shields.io/pypi/status/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/Iris-Codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Format](https://img.shields.io/pypi/format/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 
 Iris Codec can also be installed via Pip. The Encoder module dynamically links against OpenSlide to re-encode vendor slide files. This may be removed in the future, but it must be installed presently.
 
@@ -273,11 +275,11 @@ fig = plt.figure()
 plt.imshow(slide.read_slide_tile(layer_index,tile_index), interpolation='none')
 plt.show()
 ```
->[!CAUTION] If you want to full layer images of higher-res layers, do not use MatPlotLib! Use an alternative like Pillow. MatPlotLib is familiar to most data-scientists. It cannot handle rendering the amount of image data produced by full higher-resolution layers.
+>[!WARNING] If you want to full layer images of higher-res layers, do not use MatPlotLib! Use an alternative like Pillow. MatPlotLib is familiar to most data-scientists. It cannot handle rendering the amount of image data produced by full higher-resolution layers.
 
 Or generate a full layer image.
 ```py
-
+import matplotlib.pyplot as plt
 fig = plt.figure()
 layer_extent = extent.layers[0]
 for y in range(layer_extent.y_tiles):
