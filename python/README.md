@@ -11,7 +11,7 @@ Iris Codec for Python is available via the Anaconda and PyPi package managers. W
 [![PyPI - Status](https://img.shields.io/pypi/status/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/Iris-Codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 [![PyPI - Format](https://img.shields.io/pypi/format/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Downloads](https://img.shields.io/pepy/dt/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 
 Iris Codec can also be installed via Pip. The Encoder module dynamically links against OpenSlide to re-encode vendor slide files. This may be removed in the future, but it must be installed presently.
 
@@ -25,7 +25,7 @@ pip install iris-codec openslide-bin
 ](https://github.com/conda-forge/Iris-Codec-feedstock) 
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
 [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
-[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec)
+[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg?color=blue&style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec)
 
 You may configure your conda enviornment in the following way
 ```shell
@@ -63,7 +63,7 @@ if (result.success() == False):
 print(f"Slide file '{slide_path}' successfully passed validation")
 ```
 
-Open the a slide file. The following conditional will always return True if the slide has already passed validation but you may skip validation and it will return with a null slide object (but without providing the Result debug info).
+Open a slide file. The following conditional will always return True if the slide has already passed validation but you may skip validation and it will return with a null slide object (but without providing the Result debug info).
 ```python
 slide = Codec.open_slide(slide_path)
 if (not slide): 

@@ -22,10 +22,20 @@ This module has reliatively limited dependencies. As our encoder builds shift aw
 *If you are a software engineer looking to help with Iris, we are always looking for additional passionate engineers to help in developing the Iris Project.*
 
 # Installation
-The Iris Codec Community module is available
+The Iris Codec Community module is available via:
 - [Building From Source](README.md#building-from-source)
 - [Python Package Managers](README.md#python)
 - [JavaScript WASM Module](README.md#javascript)
+
+The standard module (decoder) requires:
+- C++ 20 Standard Library
+- [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo)
+- [libavif](https://github.com/AOMediaCodec/libavif)
+
+The Encoder (optional) additionally requires:
+- [OpenSlide](https://github.com/openslide/openslide) <p> *We hope to shift away from openslide in future releases*
+
+
 
 ## Building From Source
 
@@ -37,12 +47,17 @@ This library can be built from source using CMake.
 [![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-win64-CI.yml?style=for-the-badge&logo=github&label=Windows%20CMake%20CI)
 ](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
 
-The following shell commands clone and build the repository. Remember to `-DCMAKE_INSTALL_PREFIX` your chosen install directory if not installing system-wide. Additionally, Iris Codec CMake script is designed to look for and dynamically link [turbo-jpeg](https://github.com/libjpeg-turbo/libjpeg-turbo) and [AVIF](https://github.com/AOMediaCodec/libavif) by default; however, some implementations would rather simply build a self-contained statically linked binary without the need to dynamically load libraries. **In some instances where reliablity is key, this may be the most secure option.** Some architectures, such as iOS require this. To enable static dependency linkage, instead set `-DIRIS_BUILD_DEPENDENCIES=ON`. More info on the dependencies lookup and **cross compiling** Iris Codec in the [cmake directory](./cmake/).
 
+Clone the repository. 
 ```sh
 git clone --depth 1 https://github.com/IrisDigitalPathology/Iris-Codec.git
-# Configure your install directory with -DCMAKE_INSTALL_PREFIX=''
-# The following CMake Arguments are the default arguments; you may remove the -DARG_NAME entries below and it will build the same. I have just included them to add clarity to optional configurations.
+```
+
+CMake bash build commands. Remember to `-DCMAKE_INSTALL_PREFIX` your chosen install directory if not installing system-wide. Additionally, Iris Codec CMake script is designed to look for and dynamically link [turbo-jpeg](https://github.com/libjpeg-turbo/libjpeg-turbo) and [AVIF](https://github.com/AOMediaCodec/libavif) by default; however, some implementations would rather simply build a self-contained statically linked binary without the need to dynamically load libraries. **In some instances where reliablity is key, this may be the most secure option.** Some architectures, such as iOS require this. To enable static dependency linkage, instead set `-DIRIS_BUILD_DEPENDENCIES=ON`.
+ 
+
+```shell
+#/bin/bash
 cmake -B build \
     -D IRIS_BUILD_SHARED=ON \
     -D IRIS_BUILD_STATIC=ON \
@@ -54,6 +69,27 @@ cmake -B build \
 cmake --build ./Iris-Codec/build --config Release -j$CPU_COUNT
 cmake --install ./Iris-Codec/build
 ```
+
+Or Windows
+```bat
+cmake -B build -GNinja ^
+    -D CMAKE_BUILD_TYPE=Release ^
+    -D IRIS_BUILD_SHARED=ON ^
+    -D IRIS_BUILD_STATIC=ON ^
+    -D IRIS_BUILD_ENCODER=ON ^
+    -D IRIS_BUILD_DEPENDENCIES=OFF ^
+    -D IRIS_BUILD_PYTHON=OFF ^
+    -D IRIS_USE_OPENSLIDE=ON ^
+    .\Iris-Codec
+if errorlevel 1 exit 1
+cmake --build .\Iris-Codec\build --config Release
+if errorlevel 1 exit 1
+cmake --install .\Iris-Codec\build
+```
+
+ More info on the dependencies lookup and **cross compiling** Iris Codec in the [cmake directory](./cmake/).
+
+
 ## Python
 Iris Codec is available via the Anaconda and PyPi package managers. We prefer the Anaconda enviornment as it includes dynamic libraries if you choose to develop C/C++ applications with Python bindings that dynamically link the C++ Iris-Codec in addition to Python modules. 
 
@@ -65,7 +101,7 @@ Iris Codec is available via the Anaconda and PyPi package managers. We prefer th
 ](https://github.com/conda-forge/Iris-Codec-feedstock) 
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
 [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
-[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec)
+[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg?style=for-the-badge&color=blue)](https://anaconda.org/conda-forge/iris-codec)
 
 You may configure your conda enviornment in the following way
 ```shell
@@ -91,7 +127,7 @@ mamba install iris-codec
 [![PyPI - Status](https://img.shields.io/pypi/status/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/Iris-Codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 [![PyPI - Format](https://img.shields.io/pypi/format/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
+[![PyPI - Downloads](https://img.shields.io/pepy/dt/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 
 Iris Codec can also be installed via Pip. The Encoder module dynamically links against OpenSlide to re-encode vendor slide files. This may be removed in the future, but it must be installed presently.
 
@@ -112,92 +148,84 @@ We provide introduction implementation examples for the following languages belo
 Please refer to the Iris Codec API documentation for a more through explaination.
 
 ## C++ Example API
-Iris is natively a C++ program and the majority of features will first be supported in C++ followed by the other language bindings as we find time to write the bindings. 
+Iris is natively a C++ program and the majority of features will first be supported in C++ followed by the other language bindings as we find time to write bindings. 
 
-Begin by importing the [Iris Codec Core header](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp); it contains references to the [Iris Codec specific type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecTypes.hpp) as well as the general [Iris Core type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp). You may chose to perform your own file system validations and recovery routines. Iris will, however catch all of these as the main API methods are declared `noexcept`. Should an runtime error occur, it will be reported in the form of an `IrisResult` message, as seen in the `IrisResult validate_slide (const SlideOpenInfo&) noexcept;` call below. Successful loading of a slide file will return a valid `IrisCodec::Slide` object; failure will return a `nullptr`. 
+Begin by importing the [Iris Codec Core header](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp); it contains references to the [Iris Codec specific type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecTypes.hpp) as well as the general [Iris Core type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp). 
 ```cpp
 // Import the Iris Codec header
 // This import includes the types header automatically
 #import <filesystem>
 #import <Iris/IrisCodecCore.hpp>
-int main(int argc, char const *argv[])
-{
-    using namespace IrisCodec;
-    std::filesystem::path file_path = "path/to/slide_file.iris";
-
-    // You can check the file system to see if the slide exists
-    // If you choose not to, that's fine too. Iris will tell you.
-    if (!std::filesystem::exists(file_path)) {
-        printf(file_path.string() + " file does not exist\n");
-        return EXIT_FAILURE;
-    }
-
-    // You can quickly check if the header starts with Iris
-    // file extension signatures. 
-    // If you do not perform this check, that's fine too.
-    // Iris will catch it during validation.
-    if (!is_iris_codec_file(file_path.string())) {
-        printf(file_path.string() + " is not a valid Iris slide file\n");
-        return EXIT_FAILURE;
-    }
-
-    // Create an open slide info struct. Ignore the other
-    // parameters at the moment; they will default.
-    SlideOpenInfo open_info {
-        .filePath = file_path.string();
-    };
-    // Perform a deep validation of the slide file structure
-    // This will navigate the internal offset-chain and
-    // check for violations of the IFE standard.
-    IrisResult result = validate_slide (open_info);
-    if (result != IRIS_SUCCESS) {
-        printf (result.message);
-        return EXIT_FAILURE;
-    }
-    
-    // Finally create the slide object.
-    // Most Iris objects are shared_ptrs,
-    // so Iris will handle the memory clean-up
-    auto slide = open_slide (open_info);
-    if (slide) return EXIT_SUCCESS;
-    else return EXIT_FAILURE;
+```
+You may chose to perform your own file system validations and recovery routines. Iris will, however catch all of these (and the main API methods are declared `noexcept`).
+```cpp
+if (!std::filesystem::exists(file_path)) {
+    printf(file_path.string() + " file does not exist\n");
+    return EXIT_FAILURE;
 }
+if (!is_iris_codec_file(file_path.string())) {
+    printf(file_path.string() + " is not a valid Iris slide file\n");
+    return EXIT_FAILURE;
+}
+IrisResult result = validate_slide (SlideOpenInfo {
+    .filePath = file_path.string()
+    // Default values for any undefined parameters
+});
+
+if (result != IRIS_SUCCESS) {
+    printf (result.message);
+    return EXIT_FAILURE;
+}
+```
+ Should an runtime error occur, it will be reported in the form of an `IrisResult` message, as seen in the `IrisResult validate_slide (const SlideOpenInfo&) noexcept;` call. 
+ 
+ Successful loading of a slide file will return a valid `IrisCodec::Slide` object; failure will return a `nullptr`. 
+```cpp
+auto slide = open_slide (SlideOpenInfo {
+    .filePath       = file_path.string(),
+    .context        = nullptr,
+    .writeAccess    = false
+});
+if (!slide) return EXIT_FAILURE;
 ```
 
 Once opened, the slide `IrisCodec::SlideInfo` structure can be loaded using the `Result get_slide_info (const Slide&, SlideInfo&) noexcept` call and used as an initialized structure containing all the information needed to navigate the slide file and read elements.
 ```cpp
-// Read the slide information
 SlideInfo info;
 IrisResult result = get_slide_info (slide, info);
 if (result != IRIS_SUCCESS) {
     printf (result.message);
     return EXIT_FAILURE;
 }
-
-// Slide tile read info provides a simple mechanism
-// for reading slide data.
+```
+The `SlideTileReadInfo` struct provides a simple mechanism for reading slide image data. The `info.extent` struct is extremely simple to navigate. Please refer to the `struct Extent` type in the [IrisTypes.hpp](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp) core header file for more information about slide extents.
+```cpp
 struct SlideTileReadInfo read_info {
     .slide                  = slide,
     .layer                  = 0,
     .optionalDestination    = NULL, /*wrapper can go here*/
     .desiredFormat          = Iris::FORMAT_R8G8B8A8,
 };
-// Iterate
 for (auto& layer : info.extent.layers) {
     for (int y_index = 0; y_index < layer.yTiles; ++y_index) {
         for (int x_index = 0; x_index < layer.xTiles; ++x_index) {
             // Read the tile slide tile
-            auto rgba = read_slide_tile (read_info);
-            // Do something with the tile pixel values
-            // Do not worry about clean up; the slide
-            // pixel values are in a Iris::Buffer shared_ptr
+            Iris::Buffer rgba = read_slide_tile (read_info);
+            
+            // Do something with the tile pixel values in rgba
+
+            // Do not worry about clean up;
+            // The Iris::Buffer will deallocate it.
         }
     }
     read_info.layer++;
 }
 if (optional_buffer) free (optional_buffer);
 ```
-Decompressed slide data can be optionally read into preallocated memory. If the optional destination buffer is insufficiently sized, Iris will instead allocate a new buffer and return that new buffer with the pixel data. The `Iris::Buffer` should weakly reference the underlying memory as strongly referenced `Iris::Buffer` objects free underlying memory on deletion.
+Decompressed slide data can be optionally read into preallocated memory. If the optional destination buffer is insufficiently sized, Iris will instead allocate a new buffer and return that new buffer with the pixel data. 
+
+>[!NOTE]
+> If writing into externally managed memory, `Iris::Buffer` should weakly reference the underlying memory using `Wrap_weak_buffer_fom_data()` as strongly referenced `Iris::Buffer` objects deallocate underlying memory on deletion.
 ```cpp
 // In this example we have some preallocated buffer we want
 // to write our slide pixel data into. A GPU buffer is a great
@@ -223,7 +251,7 @@ if (wrapper != result) {
     printf ("Insufficient sized buffer, new buffer was allocated");
 }
 ```
-
+Iris can decompress into different pixel byte orderings and exchange data ownership via the `Iris::Buffer` strength. For more information about the Iris Buffer, which was designed primarily as a networking buffer, please see [IrisBuffer.hpp](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/priv/IrisBuffer.hpp) in the core headers. 
 
 ## Python Example API
 
@@ -243,7 +271,7 @@ if (result.success() == False):
 print(f"Slide file '{slide_path}' successfully passed validation")
 ```
 
-Open the a slide file. The following conditional will always return True if the slide has already passed validation but you may skip validation and it will return with a null slide object (but without providing the Result debug info).
+Open a slide file. The following conditional will always return True if the slide has already passed validation but you may skip validation and it will return with a null slide object (but without providing the Result debug info).
 ```python
 slide = Codec.open_slide(slide_path)
 if (not slide): 
@@ -278,4 +306,4 @@ for y in range(layer_extent.y_tiles):
 composite.show()
 ```
 >[!CAUTION]
->Despite Iris' native high read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images.
+>Despite Iris' native fast read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images.
