@@ -8,128 +8,20 @@
 #include <filesystem>
 #include "IrisCodecPriv.hpp"
 
-#if IRIS_INCLUDE_OPENSLIDE
-#include <openslide/openslide.h>
-#endif
-
 namespace IrisCodec {
-#if IRIS_INCLUDE_OPENSLIDE
-inline Extent SET_SLIDE_EXTENT_OPENSLIDE (openslide_t* openslide)
-{
-    Extent          extent;
-    
-    int64_t L0_width, L0_height;
-    openslide_get_level0_dimensions(openslide,&L0_width,&L0_height);
-
-    auto n_levels = openslide_get_level_count(openslide);
-    int64_t width, height;
-    openslide_get_level_dimensions(openslide, n_levels-1, &width, &height);
-    extent.width        = U32_CAST(width);
-    extent.height       = U32_CAST(height);
-    extent.layers       = LayerExtents(n_levels);
-    auto extent_IT     = extent.layers.begin();
-    auto f_level        = U32_CAST(0);
-    auto r_level        = U32_CAST(extent.layers.size() - 1);
-    for (; extent_IT  != extent.layers.end(); f_level++, r_level--, extent_IT++) {
-        auto& _SL_      = *extent_IT;
-        openslide_get_level_dimensions(openslide, r_level, &width, &height);
-        _SL_.xTiles      = U32_CAST(std::ceil(F32_CAST(width)/F32_CAST(TILE_PIX_LENGTH)));
-        _SL_.yTiles      = U32_CAST(std::ceil(F32_CAST(height)/F32_CAST(TILE_PIX_LENGTH)));
-        _SL_.scale       =  width > height ?
-        F32_CAST(width)/F32_CAST(extent.width) :
-        F32_CAST(height)/F32_CAST(extent.height);
+inline void CHECK_ENCODER (const Encoder& encoder) {
+    if (!encoder)               throw std::runtime_error ("No valid encoder provided");
+}
+inline void CHECK_MUTABLE (const Encoder& encoder) {
+    CHECK_ENCODER(encoder);
+    switch (encoder->get_status()) {
+        case ENCODER_INACTIVE:  return;
+        case ENCODER_ACTIVE:    throw std::runtime_error("Encoder currently active and thus immutable");
+        case ENCODER_ERROR:     throw std::runtime_error("Encoder failed in error and must be reset first.");
+        case ENCODER_SHUTDOWN:  throw std::runtime_error("Encoder undergoing destruction and thus immutable");
     }
-    for (extent_IT = extent.layers.begin(); extent_IT != extent.layers.end(); extent_IT++)
-        extent_IT->downsample = extent.layers.back().scale / extent_IT->scale;
-    
-    return extent;
 }
-inline Buffer READ_OPENSLIDE_TILE (const EncoderSource src, LayerIndex __LI, TileIndex __TI)
-{
-    const auto os       = src.openslide;
-    if (os == NULL)                                     return NULL;
-    const auto extent   = src.extent;
-    if (__LI    >= extent.layers.size())                return NULL;
-    auto& __LE   = extent.layers[__LI];
-    if (__TI    >= __LE.xTiles * __LE.yTiles)           return NULL;
-    auto buffer         = Create_strong_buffer  (TILE_PIX_BYTES_RGBA);
-    auto& level_extent  = extent.layers[__LI];
-    auto openSlideLevel = static_cast<uint32_t> ((extent.layers.size()-1)-__LI);
-    auto x_tile_index   = static_cast<float>    (__TI % level_extent.xTiles);
-    auto y_tile_index   = static_cast<float>    (__TI / level_extent.xTiles);
-    openslide_read_region(os, static_cast<uint32_t*>(buffer->append(TILE_PIX_BYTES_RGBA)),
-                          static_cast<int64_t>  (std::round(x_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
-                          static_cast<int64_t>  (std::round(y_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
-                          openSlideLevel,
-                          TILE_PIX_LENGTH, TILE_PIX_LENGTH);
-    return buffer;
-}
-#endif
-inline Buffer READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, TileIndex tile)
-{
-    switch (src.sourceType) {
-            
-        case EncoderSource::ENCODER_SRC_UNDEFINED: throw std::runtime_error("Cannot read source tile; undefined source");
-        case EncoderSource::ENCODER_SRC_IRISSLIDE:
-            return IrisCodec::read_slide_tile (SlideTileReadInfo{
-                .slide          = src.irisSlide,
-                .layerIndex     = layer,
-                .tileIndex      = tile,
-                .desiredFormat  = src.format
-        });
-        case EncoderSource::ENCODER_SRC_OPENSLIDE:
-            #if IRIS_INCLUDE_OPENSLIDE
-            return READ_OPENSLIDE_TILE (src, layer, tile);
-            #else
-            throw std::runtime_error("Openslide linkage was NOT compiled into this binary. Request a new version of Iris Codec with OpenSlide support if you would like to decode slide scanning vendor slide files only accessable to OpenSlide.");
-            #endif
-            
-        case EncoderSource::ENCODER_SRC_APERIO:
-            throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
-    } return Buffer();
-}
-inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NULL)
-{
-    if (!std::filesystem::exists(path)) throw std::runtime_error
-        ("File system failed to identify source file " + path);
-    
-    if (is_iris_codec_file(path)) {
-        EncoderSource source;
-        source.sourceType   = EncoderSource::ENCODER_SRC_IRISSLIDE;
-        source.irisSlide    = open_slide(SlideOpenInfo {
-            .filePath       = path,
-            .context        = context,
-            .writeAccess    = false,
-        });
-        if (!source.irisSlide) throw std::runtime_error
-            ("No valid Iris slide returned from IrisCodec::open_slide");
-        
-        source.extent       = source.irisSlide->get_slide_info().extent;
-        source.format       = source.irisSlide->get_slide_info().format;
-            
-        return source;
-    }
-    #if IRIS_INCLUDE_OPENSLIDE
-    if (openslide_detect_vendor(path.c_str())) {
-        EncoderSource source;
-        source.sourceType   = EncoderSource::ENCODER_SRC_OPENSLIDE;
-        source.openslide    = openslide_open(path.c_str());
-        
-        if (!source.openslide) throw std::runtime_error
-            ("No valid openslide handle returned from openslide_open");
-
-        source.extent       = SET_SLIDE_EXTENT_OPENSLIDE(source.openslide);
-        source.format       = FORMAT_B8G8R8A8; // OpenSlide always reads ARGB
-        
-        return source;
-    }
-    throw std::runtime_error("Provided source file path was not recognized by any available decoders.");
-    #else
-    throw std::runtime_error("Provided source file path was not recognized by any available decoders. You may need an encoder built with OpenSlide enabled.");
-    #endif
-   
-}
-inline std::string to_string (EncoderStatus status)
+inline std::string TO_STRING (EncoderStatus status)
 {
     switch (status) {
         case ENCODER_INACTIVE:  return "ENCODER_INACTIVE";
@@ -170,18 +62,6 @@ Encoder create_encoder(EncodeSlideInfo &info) noexcept
         << e.what() << "\n";
         return NULL;
     }   return NULL;
-}
-inline void CHECK_ENCODER (const Encoder& encoder) {
-    if (!encoder)               throw std::runtime_error ("No valid encoder provided");
-}
-inline void CHECK_MUTABLE (const Encoder& encoder) {
-    CHECK_ENCODER(encoder);
-    switch (encoder->get_status()) {
-        case ENCODER_INACTIVE:  return;
-        case ENCODER_ACTIVE:    throw std::runtime_error("Encoder currently active and thus immutable");
-        case ENCODER_ERROR:     throw std::runtime_error("Encoder failed in error and must be reset first.");
-        case ENCODER_SHUTDOWN:  throw std::runtime_error("Encoder undergoing destruction and thus immutable");
-    }
 }
 Result reset_encoder(Encoder &encoder) noexcept
 {
@@ -344,6 +224,7 @@ Result __INTERNAL__Encoder::get_encoder_progress (EncoderProgress &progress) con
             progress.progress       = static_cast<float>(_tracker.completed.load())
                                     / static_cast<float>(_tracker.total);
             progress.dstFilePath    = _tracker.dst_path;
+            progress.errorMsg       = _tracker.error_msg;
             return IRIS_SUCCESS;
             
         case ENCODER_ERROR: {
@@ -410,7 +291,205 @@ Result __INTERNAL__Encoder::reset_encoder()
     
     return IRIS_SUCCESS;
 }
+
+// MARK: - OPENSLIDE METHODS
+#if IRIS_INCLUDE_OPENSLIDE
+#include <openslide/openslide.h>
+inline Extent READ_EXTENT_OPENSLIDE (openslide_t* openslide)
+{
+    Extent          extent;
+    
+    int64_t L0_width, L0_height;
+    openslide_get_level0_dimensions(openslide,&L0_width,&L0_height);
+
+    auto n_levels = openslide_get_level_count(openslide);
+    int64_t width, height;
+    openslide_get_level_dimensions(openslide, n_levels-1, &width, &height);
+    extent.width        = U32_CAST(width);
+    extent.height       = U32_CAST(height);
+    extent.layers       = LayerExtents(n_levels);
+    auto extent_IT     = extent.layers.begin();
+    auto f_level        = U32_CAST(0);
+    auto r_level        = U32_CAST(extent.layers.size() - 1);
+    for (; extent_IT  != extent.layers.end(); f_level++, r_level--, extent_IT++) {
+        auto& _SL_      = *extent_IT;
+        openslide_get_level_dimensions(openslide, r_level, &width, &height);
+        _SL_.xTiles      = U32_CAST(std::ceil(F32_CAST(width)/F32_CAST(TILE_PIX_LENGTH)));
+        _SL_.yTiles      = U32_CAST(std::ceil(F32_CAST(height)/F32_CAST(TILE_PIX_LENGTH)));
+        _SL_.scale       =  width > height ?
+        F32_CAST(width)/F32_CAST(extent.width) :
+        F32_CAST(height)/F32_CAST(extent.height);
+    }
+    for (extent_IT = extent.layers.begin(); extent_IT != extent.layers.end(); extent_IT++)
+        extent_IT->downsample = extent.layers.back().scale / extent_IT->scale;
+    
+    return extent;
+}
+inline Buffer READ_OPENSLIDE_TILE (const EncoderSource src, LayerIndex __LI, TileIndex __TI)
+{
+    const auto os       = src.openslide;
+    if (os == NULL)                                     return NULL;
+    const auto extent   = src.extent;
+    if (__LI    >= extent.layers.size())                return NULL;
+    auto& __LE   = extent.layers[__LI];
+    if (__TI    >= __LE.xTiles * __LE.yTiles)           return NULL;
+    auto buffer         = Create_strong_buffer  (TILE_PIX_BYTES_RGBA);
+    auto& level_extent  = extent.layers[__LI];
+    auto openSlideLevel = static_cast<uint32_t> ((extent.layers.size()-1)-__LI);
+    auto x_tile_index   = static_cast<float>    (__TI % level_extent.xTiles);
+    auto y_tile_index   = static_cast<float>    (__TI / level_extent.xTiles);
+    openslide_read_region(os, static_cast<uint32_t*>(buffer->append(TILE_PIX_BYTES_RGBA)),
+                          static_cast<int64_t>  (std::round(x_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
+                          static_cast<int64_t>  (std::round(y_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
+                          openSlideLevel,
+                          TILE_PIX_LENGTH, TILE_PIX_LENGTH);
+    return buffer;
+}
+enum OpenSlideProperties {
+    NOT_OPENSLIDE,
+    UNUSED,
+    MPP,
+    OBJECTIVE_POWER,
+    
+};
+inline OpenSlideProperties PARSE_OPENSLIDE_PROPERTY (const char* const key_chars) {
+    if (strstr(key_chars, "openslide") == NULL) return NOT_OPENSLIDE;
+    if (strcmp(key_chars, OPENSLIDE_PROPERTY_NAME_MPP_X) == 0) return MPP;
+    if (strcmp(key_chars, OPENSLIDE_PROPERTY_NAME_OBJECTIVE_POWER) == 0) return OBJECTIVE_POWER;
+    return UNUSED;
+}
+inline Metadata READ_OPENSLIDE_METADATA (const EncoderSource src) {
+    openslide_t* os = src.openslide;
+    Metadata metadata;
+    
+    // Insert the attributes
+    metadata.attributes.type = METADATA_FREE_TEXT;
+    const char* const* attributes = openslide_get_property_names(os);
+    for (int index = 0; attributes[index] != NULL; ++index) {
+        switch (PARSE_OPENSLIDE_PROPERTY(attributes[index])) {
+            // Unused openslie parameter, probably duplicated elsewhere
+            case UNUSED: continue;
+            
+            // Break and encode as is. It's likely a vendor feature
+            case NOT_OPENSLIDE: break;
+                
+            // MpPN (Normalized MPP to layer scale)
+            // We multiply because this value is currently norm
+            // relative to the highest resolution layer (ex 1/64x)
+            // This will allow for direct comp with on-screen pixels
+            // Because viewers work in relative zoom.
+            // We want this 1:1 lowest res layer (layer scale = 1)
+            case MPP: {
+                metadata.micronsPerPixel = round(atof
+                (openslide_get_property_value(os, attributes[index])) *
+                openslide_get_level_downsample
+                (os,openslide_get_level_count(os)-1) * 1000.f)/1000.f;
+                // You will note it's rounded to the 1000ths
+                continue;
+            }
+                
+            // Normalize the magnification coefficient ratio
+            // to the layer scale. This allows for multiplying
+            // with relative zoom for direct comp with on-screen pixels
+            case OBJECTIVE_POWER:
+                metadata.magnification = round(atof
+                (openslide_get_property_value(os, attributes[index])) /
+                openslide_get_level_downsample
+                (os,openslide_get_level_count(os)-1) * 1000.f)/1000.f;
+                // You will note it's rounded to the 1000ths
+                continue;
+        }
+        if (auto attribute = openslide_get_property_value(os, attributes[index])) {
+            auto __key = std::string(attributes[index]);
+            auto __str = std::string(attribute);
+            metadata.attributes[__key] = std::u8string(__str.begin(),__str.end());
+        }
+    }
+    
+    // Insert the associated image labels
+    const char* const* image_labels = openslide_get_associated_image_names(os);
+    for (int label = 0; image_labels[label] != NULL; ++label)
+        metadata.associatedImages.insert(std::string(image_labels[label]));
+    
+    // Insert the ICC profile (if present)
+    int64_t icc_bytes = openslide_get_icc_profile_size(os);
+    if (icc_bytes > 0) {
+        metadata.ICC_profile.resize(icc_bytes);
+        openslide_read_icc_profile(os, metadata.ICC_profile.data());
+    }
+    
+    return metadata;
+}
+inline AssociatedImageInfo READ_OPENSLIDE_ASSOCIATED_IMAGE_INFO (openslide_t* os, const std::string& label)
+{
+    int64_t width, height;
+    openslide_get_associated_image_dimensions(os, label.c_str(), &width, &height);
+    if (width > UINT32_MAX) throw std::runtime_error
+        ("openslide associated image width is greater than 32-bit max value");
+    if (height > UINT32_MAX) throw std::runtime_error
+        ("openslide associated image height is greater than 32-bit max value");
+    return AssociatedImageInfo {
+        .imageLabel     = label,
+        .width          = static_cast<uint32_t>(width),
+        .height         = static_cast<uint32_t>(height),
+        .encoding       = IMAGE_ENCODING_DEFAULT,
+        .sourceFormat   = Iris::FORMAT_B8G8R8A8, // Openslide is alway ARGB (big-endian)
+        .orientation    = ORIENTATION_0
+    };
+}
+inline Buffer READ_OPENSLIDE_ASSOCIATED_IMAGE (openslide_t* os, const AssociatedImageInfo& info)
+{
+    size_t image_size = info.width * info.height * sizeof(uint32_t);
+    Buffer dst = Create_strong_buffer(image_size);
+    openslide_read_associated_image(os, info.imageLabel.c_str(), static_cast<uint32_t*>(dst->data()));
+    dst->set_size(image_size);
+    return dst;
+}
+#endif
+// MARK: - APERIO SPECIFIC METHODS
+
 // MARK: - FILE ENCODING METHODS
+inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NULL)
+{
+    if (!std::filesystem::exists(path)) throw std::runtime_error
+        ("File system failed to identify source file " + path);
+    
+    if (is_iris_codec_file(path)) {
+        EncoderSource source;
+        source.sourceType   = EncoderSource::ENCODER_SRC_IRISSLIDE;
+        source.irisSlide    = open_slide(SlideOpenInfo {
+            .filePath       = path,
+            .context        = context,
+            .writeAccess    = false,
+        });
+        if (!source.irisSlide) throw std::runtime_error
+            ("No valid Iris slide returned from IrisCodec::open_slide");
+        
+        source.extent       = source.irisSlide->get_slide_info().extent;
+        source.format       = source.irisSlide->get_slide_info().format;
+            
+        return source;
+    }
+    #if IRIS_INCLUDE_OPENSLIDE
+    if (openslide_detect_vendor(path.c_str())) {
+        EncoderSource source;
+        source.sourceType   = EncoderSource::ENCODER_SRC_OPENSLIDE;
+        source.openslide    = openslide_open(path.c_str());
+        
+        if (!source.openslide) throw std::runtime_error
+            ("No valid openslide handle returned from openslide_open");
+
+        source.extent       = READ_EXTENT_OPENSLIDE(source.openslide);
+        source.format       = FORMAT_B8G8R8A8; // OpenSlide always reads ARGB
+        
+        return source;
+    }
+    throw std::runtime_error("Provided source file path was not recognized by any available decoders.");
+    #else
+    throw std::runtime_error("Provided source file path was not recognized by any available decoders. You may need an encoder built with OpenSlide enabled.");
+    #endif
+   
+}
 inline BYTE* FILE_CHECK_EXPAND (const File& file, size_t required_size)
 {
     if (required_size > file->size) {
@@ -422,6 +501,29 @@ inline BYTE* FILE_CHECK_EXPAND (const File& file, size_t required_size)
             throw std::runtime_error
             ("Failed to resize slide file "+file->path+": " + result.message);
     } return file->ptr;
+}
+inline Buffer READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, TileIndex tile)
+{
+    switch (src.sourceType) {
+            
+        case EncoderSource::ENCODER_SRC_UNDEFINED: throw std::runtime_error("Cannot read source tile; undefined source");
+        case EncoderSource::ENCODER_SRC_IRISSLIDE:
+            return IrisCodec::read_slide_tile (SlideTileReadInfo{
+                .slide          = src.irisSlide,
+                .layerIndex     = layer,
+                .tileIndex      = tile,
+                .desiredFormat  = src.format
+        });
+        case EncoderSource::ENCODER_SRC_OPENSLIDE:
+            #if IRIS_INCLUDE_OPENSLIDE
+            return READ_OPENSLIDE_TILE (src, layer, tile);
+            #else
+            throw std::runtime_error("Openslide linkage was NOT compiled into this binary. Request a new version of Iris Codec with OpenSlide support if you would like to decode slide scanning vendor slide files only accessable to OpenSlide.");
+            #endif
+            
+        case EncoderSource::ENCODER_SRC_APERIO:
+            throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
+    } return Buffer();
 }
 inline static void ENCODE_SLIDE_TILES (const Context ctx,
                                        const EncoderSource& src,
@@ -569,7 +671,7 @@ inline Offset STORE_TILE_TABLE (const File& file, const Abstraction::TileTable& 
     // WRITE THE TILE TABLE HEADER
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     //
-    auto    ttable_size     = Serialization::TILE_TABLE::TABLE_HEADER_SIZE;
+    auto    ttable_size     = Serialization::TILE_TABLE::HEADER_SIZE;
     Offset  ttable_offset   = offset.fetch_add(ttable_size);
     __base                  = FILE_CHECK_EXPAND(file, offset);
     Serialization::TileTableCreateInfo tile_table_create_info {
@@ -587,30 +689,218 @@ inline Offset STORE_TILE_TABLE (const File& file, const Abstraction::TileTable& 
     // Return the Tile Table Offset
     return ttable_offset;
 }
-inline Offset STORE_METADATA (const File& file, const Metadata& metadata, atomic_uint64& offset)
+inline Offset RESERVE_METADATA (const File& file, atomic_uint64& offset)
 {
     auto    metadata_size   = Serialization::METADATA::HEADER_SIZE;
     Offset  metadata_offset = offset.fetch_add(metadata_size);
-    auto    __base          = FILE_CHECK_EXPAND(file, offset);
-    
-    // WRITE METADATA HERE
-    Serialization::MetadataCreateInfo create_info {
-        .metadataOffset     = metadata_offset,
-//        .codecVersion   =
-        .micronsPerPixel    = metadata.micronsPerPixexl
-    };
-    Serialization::STORE_METADATA(__base, create_info);
-    
-    return metadata_offset;
+    FILE_CHECK_EXPAND(file, offset);
+    return  metadata_offset;
 }
-inline void STORE_FILE_HEADER (const File& file, const Serialization::HeaderCreateInfo& create_info)
+inline Metadata READ_METADATA (const EncoderSource& source) {
+    switch (source.sourceType) {
+        case EncoderSource::ENCODER_SRC_UNDEFINED:
+            throw std::runtime_error("READ_METADATA failed due to undefined source type");
+        case EncoderSource::ENCODER_SRC_IRISSLIDE:
+            return source.irisSlide->get_slide_info().metadata;
+        case EncoderSource::ENCODER_SRC_OPENSLIDE:
+            return READ_OPENSLIDE_METADATA(source);
+        case EncoderSource::ENCODER_SRC_APERIO:
+            //TODO: APERIO READ METADATA
+            throw std::runtime_error("READ_METADATA failed as APERIO TIFF reads not yet built; Use openslide for the moment");
+    }
+}
+inline Offset STORE_ICC (const File& file,
+                         const Metadata& metadata,
+                         atomic_uint64& offset)
 {
-    if (file->size < create_info.fileSize) throw std::runtime_error
+    // If there is no embedded ICC profile, return NULL_OFFSET
+    // to indicate this optional block will not be used.
+    if (metadata.ICC_profile.size() == 0) return NULL_OFFSET;
+    
+    // Get bytes size and write ICC profile to byte stream
+    Size profile_size       = Serialization::SIZE_ICC_COLOR_PROFILE(metadata.ICC_profile);
+    Offset profile_offset   = offset.fetch_add(profile_size);
+    auto   __base           = FILE_CHECK_EXPAND(file, offset);
+    Serialization::STORE_ICC_COLOR_PROFILE(__base, profile_offset, metadata.ICC_profile);
+    
+    // Return the byte location of the ICC profile
+    return profile_offset;
+}
+inline Offset STORE_ASSOCIATED_IMAGES (const Context& ctx,
+                                       const File& file,
+                                       const EncoderSource& source,
+                                       const Metadata& metadata,
+                                       atomic_uint64& offset)
+{
+    // If there are no associated images, return NULL_OFFSET
+    // to indicate this optional block will not be used.
+    if (metadata.associatedImages.size() == 0) return NULL_OFFSET;
+    
+    // Otherwise begin encoding images
+    Serialization::AssociatedImageCreateInfo associated_images;
+    
+    // Encode each of the associated image variable byte blocks
+    // This corresponds with IFE Specification Section 2.4.7
+    for (auto& label : metadata.associatedImages) {
+        AssociatedImageInfo info;
+        Buffer bytes;
+        try {
+            // Get the compressed image stream (bytes) and image info (info)
+            // routine based upon source type
+            switch (source.sourceType) {
+                case EncoderSource::ENCODER_SRC_UNDEFINED:
+                    throw std::runtime_error("STORE_METADATA failed due to undefined source type");
+                case EncoderSource::ENCODER_SRC_IRISSLIDE:
+                    info    = source.irisSlide->get_assoc_image_info(label);
+                    bytes   = source.irisSlide->get_assoc_image(label);
+                    break;
+                case EncoderSource::ENCODER_SRC_OPENSLIDE:
+                    info    = READ_OPENSLIDE_ASSOCIATED_IMAGE_INFO(source.openslide, label);
+                    bytes   = ctx->compress_image(CompressImageInfo{
+                        .pixelArray = READ_OPENSLIDE_ASSOCIATED_IMAGE(source.openslide, info),
+                        .width      = info.width,
+                        .height     = info.height,
+                        .format     = info.sourceFormat,
+                        .encoding   = info.encoding,
+                        .quality    = QUALITY_DEFAULT
+                    });
+                    break;
+                case EncoderSource::ENCODER_SRC_APERIO:
+                    //TODO: APERIO READ METADATA
+                    throw std::runtime_error("READ_METADATA failed as APERIO TIFF reads not yet built; Use openslide for the moment");
+            }
+            if (bytes->size() == 0) throw std::runtime_error
+                ("no bytes given for image buffer byte size");
+            
+            // Store the data-block 1) get size 2) write to the stream 3) record location
+            Size block_size         = Serialization::SIZE_IMAGES_BYTES({
+                .title              = label,
+                .dataBytes          = bytes->size()
+            });
+            Offset block_offset     = offset.fetch_add(block_size);
+            auto   __base           = FILE_CHECK_EXPAND(file, offset);
+            Serialization::STORE_IMAGES_BYTES(__base, {
+                .offset             = block_offset,
+                .title              = label,
+                .data               = (BYTE*)bytes->data(),
+                .dataBytes          = bytes->size()
+            });
+            associated_images.images.push_back({
+                .offset             = block_offset,
+                .info               = info
+            });
+            
+        } catch (std::runtime_error &error) {
+            std::cout   << "Failed to store associated image labeled \""
+            << label << "\": " << error.what() << "\n";
+            continue;
+        }
+    }
+    
+    // Now record of all associated images to the byte stream
+    Size   images_size              = Serialization::SIZE_IMAGES_ARRAY(associated_images);
+    Offset images_offset            = offset.fetch_add(images_size);
+    associated_images.offset        = images_offset;
+    auto   __base                   = FILE_CHECK_EXPAND(file, offset);
+    Serialization::STORE_IMAGES_ARRAY(__base, associated_images);
+    
+    // Return the images array offset
+    return images_offset;
+}
+inline Offset STORE_ATTRIBUTES (const File& file,
+                                const Metadata& metadata,
+                                atomic_uint64& offset)
+{
+    // If there are no attributes, return NULL_OFFSET
+    // to indicate this optional block will not be used.
+    const auto& attributes = metadata.attributes;
+    if (attributes.size() == 0) return NULL_OFFSET;
+    
+    // Attributes validation
+    switch (attributes.type) {
+        case METADATA_UNDEFINED:throw std::runtime_error
+            ("Metadata attributes have an undefined type. These will NOT be written to the file stream.");
+            
+        case METADATA_I2S:
+            if (!attributes.version) {
+                // Freetext metadata
+                break;
+            }
+            // TODO: Add I2S here. Add I2S Validation here
+            break;
+        case METADATA_DICOM:
+            
+            // TODO: Add libDICOM validation here.
+            break;
+    }
+    
+    // Attributes are stored in 3 data-blocks
+    // 1) Sizes
+    // 2) Bytes
+    // 3) Attributes header
+    
+    // Store the attributes sizes (how to slice up the char byte blob)
+    // Sections 2.2.4
+    Size sizes_size     = Serialization::SIZE_ATTRIBUTES_SIZES(attributes);
+    Offset sizes_offset = offset.fetch_add(sizes_size);
+    auto  __base        = FILE_CHECK_EXPAND(file, offset);
+    Serialization::STORE_ATTRIBUTES_SIZES(__base, sizes_offset, attributes);
+    
+    // Store the raw attributes characters byte-blob
+    // Section 2.2.5
+    Size bytes_size     = Serialization::SIZE_ATTRIBUTES_BYTES(attributes);
+    Offset bytes_offset = offset.fetch_add(bytes_size);
+    __base              = FILE_CHECK_EXPAND(file, offset);
+    Serialization::STORE_ATTRIBUTES_BYTES(__base, bytes_offset, attributes);
+    
+    // Store the annotation header
+    Offset attr_offset  = offset.fetch_add(Serialization::ATTRIBUTES::HEADER_SIZE);
+    Serialization::STORE_ATTRIBUTES(__base, {
+        .attributesOffset   = attr_offset,
+        .type               = attributes.type,
+        .version            = attributes.version,
+        .sizes              = sizes_offset,
+        .bytes              = bytes_offset
+    });
+    
+    return attr_offset;
+}
+inline void STORE_METADATA (const File& file,
+                            const Offset metadata_offset,
+                            const Metadata& metadata,
+                            const Offset ICC_offset,
+                            const Offset images_offset,
+                            const Offset attributes_offset,
+                            const Offset annotations_offset)
+{
+    Serialization::STORE_METADATA(file->ptr, {
+        .metadataOffset     = metadata_offset,
+        .codecVersion       = get_codec_version(),
+        .attributes         = attributes_offset,
+        .images             = images_offset,
+        .ICC_profile        = ICC_offset,
+        .annotations        = annotations_offset,
+        .micronsPerPixel    = metadata.micronsPerPixel,
+        .magnification      = metadata.magnification
+    });
+}
+inline void STORE_FILE_HEADER (const File& file,
+                               const Size file_size,
+                               const uint32_t revision,
+                               const Offset tile_table_offset,
+                               const Offset metadata_offset)
+{
+    if (file->size < file_size) throw std::runtime_error
         ("File failed size check. Attempting to write header for truncated file.");
-    Serialization::STORE_FILE_HEADER(file->ptr, create_info);
+    Serialization::STORE_FILE_HEADER(file->ptr, {
+        .fileSize           = file_size,
+        .revision           = revision,
+        .tileTableOffset    = tile_table_offset,
+        .metadataOffset     = metadata_offset
+    });
     resize_file(file, FileResizeInfo {
-        .size       = create_info.fileSize,
-        .pageAlign  = false
+        .size               = file_size,
+        .pageAlign          = false
     });
 }
 Result __INTERNAL__Encoder::dispatch_encoder()
@@ -664,17 +954,18 @@ Result __INTERNAL__Encoder::dispatch_encoder()
         std::cout       << "Destination file " << dst_file_path
                         << " already exists. Overwriting...\n";
     }
-        
-    FileCreateInfo file_info {
-        .filePath       = dst_file_path.string()
-    };
-    auto file = create_file (file_info);
+    
+    // Generate a temporary cache file.
+    auto file = create_cache_file({
+        .unlink     = false,    // Maintain OS link to file so it can be renamed
+        .context    = _context, // Provide own Codec context
+    });
     if (file == nullptr)
-        throw std::runtime_error("Could not create a destination slide file");
+        throw std::runtime_error("Could not create a temporary slide file for encoding");
     
     // Reset the tracker
     auto& extent        = source.extent;
-    _tracker.dst_path   = dst_file_path.string();
+    _tracker.dst_path   = file->get_path();
     _tracker.completed  = 0;
     _tracker.total      = 0;
     _tracker.layers     = EncoderTracker::Layers(extent.layers.size());
@@ -689,11 +980,11 @@ Result __INTERNAL__Encoder::dispatch_encoder()
     // __INTERNAL__Encoder::dispatch_encoder() is an ASYNCHRONOUS method
     // there will be a separate main thread that waits upon the encoding
     // threads. This is threads[0]. We will move the remainder of the
-    // metho to this separate thread...
+    // method to this separate thread...
     _threads = Threads(std::thread::hardware_concurrency()+1);
     _threads[0] = std::thread {[this, file, source, dst_file_path](){
         
-        // ~~~ We are now on the separate assynchronous main thread ~~~
+        // ~~~ We are now on the separate asynchronous main thread ~~~
         
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         // CREATE TILE TABLE STEP
@@ -731,42 +1022,93 @@ Result __INTERNAL__Encoder::dispatch_encoder()
             };
         for (auto thread_idx = 1; thread_idx < _threads.size(); ++thread_idx)
             if (_threads[thread_idx].joinable()) _threads[thread_idx].join();
-        if (_status!= ENCODER_ACTIVE) { _status.notify_all(); return;}
         // ~~~~~~~~~~~~~~~~~~~~~ END TILE ENCODING ~~~~~~~~~~~~~~~~~~~~~~~~~
         
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // READ THE METADATA FROM THE SOURCE FILE
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        Metadata metadata;
+        // If any thread has inactivated the encoder, exit
+        if (_status!= ENCODER_ACTIVE) { _status.notify_all(); goto ENCODING_FAILED;}
+        // This is our exit routine. Delete the created file
+        if (false) { ENCODING_FAILED: IrisCodec::delete_file(file); return;}
         
+        // ~~~~~~~~~~~~~~~~~~~~~ BEGIN VALIDATION  ~~~~~~~~~~~~~~~~~~~~~~~~~
+        Offset tile_table_offset = NULL_OFFSET;
         try {
-            WriteLock exclusive_lock (file->resize);
             // Check the tiles to ensure they were properly written to file
             VALIDATE_TILE_WRITES (tracker, tile_table);
+            
             // Write the tile table and return the offset
-            Offset tile_table_offset = STORE_TILE_TABLE (file, tile_table, offset);
+            tile_table_offset = STORE_TILE_TABLE (file, tile_table, offset);
+            
+        } catch (std::runtime_error &error) {
+            _status.store(ENCODER_ERROR);
+            MutexLock __ (_tracker.error_msg_mutex);
+            _tracker.error_msg += std::string("Tile table validation failed: ") +
+                                  error.what() + "\n";
+            _status.notify_all();
+            return;
+        }
+        
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // METADATA FORMATTING BLOCK
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // We prefer the following structure based upon anticipated frequency of updates
+        // SOF | TILES | TILE TABLE | METADATA HEADER | IMAGES | ATTRIBUTES | ANNOTATIONS
+        
+        try {
+            // Read the source metadata
+            Metadata metadata           = READ_METADATA (source);
+            
+            // Reserve space for the Metadata block. I like to put it earlier
+            // as it has no signficant risk of growing in size with file modification
+            Offset metadata_offset      = RESERVE_METADATA(file, offset);
+            
             // Write the metadata and return the metadata block offset
-            Offset metadata_offset  = STORE_METADATA(file, metadata, offset);
-            STORE_FILE_HEADER (file, {
-                .fileSize           = offset.load(),
-                .revision           = 0,
-                .tileTableOffset    = tile_table_offset,
-                .metadataOffset     = metadata_offset
-            });
+            Offset ICC_offset           = STORE_ICC (file, metadata, offset);
+            
+            // Write all of the associated images to disk
+            Offset images_offset        = STORE_ASSOCIATED_IMAGES (_context, file, source, metadata, offset);
+            
+            // Write all of the attributes to disk
+            Offset attributes_offset    = STORE_ATTRIBUTES (file, metadata, offset);
+            
+            // TODO: write annotations to disk
+            Offset annoations_offset    = NULL_OFFSET; // Will tackle this next.
+            
+            // Store the metadata
+            STORE_METADATA      (file, metadata_offset, metadata,
+                                 ICC_offset,
+                                 images_offset,
+                                 attributes_offset,
+                                 annoations_offset);
+            
+            // Store the file header
+            STORE_FILE_HEADER   (file,
+                                 offset.load(), 0,
+                                 tile_table_offset,
+                                 metadata_offset);
+            
         } catch (std::runtime_error& e) {
             _status.store(ENCODER_ERROR);
             MutexLock __ (_tracker.error_msg_mutex);
-            _tracker.error_msg += std::string("File structure encoding failed: ") +
+            _tracker.error_msg += std::string("Metadata encoding failed: ") +
                                   e.what() + "\n";
             _status.notify_all();
-            return;
+            goto ENCODING_FAILED;
+        }
+        
+        auto rename = IrisCodec::rename_file(file, dst_file_path);
+        if (rename & IRIS_FAILURE) {
+            _status.store(ENCODER_ERROR);
+            MutexLock __ (_tracker.error_msg_mutex);
+            _tracker.error_msg += rename.message;
+            _status.notify_all();
+            goto ENCODING_FAILED;
         }
         
         // Encoding is complete. Notify any waiting threads
         auto STATUS = ENCODER_ACTIVE;
         if (_status.compare_exchange_strong(STATUS, ENCODER_INACTIVE) == false) {
             std::cerr   << "Codec Error -- Encoder exited with status "
-                        << to_string(_status) << "\n";
+                        << TO_STRING(_status) << "\n";
         } _status.notify_all();
     }};
     

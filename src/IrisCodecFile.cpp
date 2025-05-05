@@ -10,10 +10,12 @@
 #include <system_error>
 #include "IrisCodecPriv.hpp"
 namespace IrisCodec {
-inline void         GENERATE_TEMP_FILE          (const File& file);
+inline void         GENERATE_TEMP_FILE          (const File& file, bool unlink);
 inline size_t       GET_FILE_SIZE               (const File& file);
 inline void         PERFORM_FILE_MAPPING        (const File& file);
 inline size_t       RESIZE_FILE                 (const File& file, size_t bytes);
+inline void         RENAME_FILE                 (const File& file, const std::string& path);
+inline void         DELETE_FILE                 (const File& file);
 inline bool         LOCK_FILE                   (const File& file, bool exclusive, bool wait);
 inline void         UNLOCK_FILE                 (const File& file);
 
@@ -26,8 +28,36 @@ size_t get_page_size() {
     return sys_info.dwPageSize;
 };
 const size_t PAGE_SIZE = get_page_size();
-inline void GENERATE_TEMP_FILE (File& file) {
-    int result  = -1;
+inline void GENERATE_TEMP_FILE (File& file, bool unlink_) {
+    auto& file_path = file->path;
+    
+    TCHAR TEMP_DIR_PATH [MAX_PATH+1];
+    TCHAR TEMP_FILE_NAME[MAX_PATH+1];
+    
+    auto  dir_len = GetTempPath2 (MAX_PATH+1, TEMP_DIR_PATH);
+    if (!dir_len) throw std::system_error(errno, std::generic_category(),
+        "GENERATE_TEMP_FILE failed to get temp file dir");
+    
+    auto name_len = GetTempFileName (TEMP_DIR_PATH,
+                                     TEXT("IrisCodecCache"),
+                                     0,TEMP_FILE_NAME);
+    if (!name_len) throw std::system_error(errno, std::generic_category(),
+        "GENERATE_TEMP_FILE failed to get unique cache file name");
+
+    file_path = std::string(TEMP_FILE_NAME, name_len);
+    
+
+    // Open stream access to the file
+    file->handle = fopen(file->path.c_str(),"rbR+");
+
+    // Unlink the file from the file system so that when the program
+    // closes, the file will be immediately released.
+    if (ulink) {
+        if (_unlink(file_path.c_str()) == -1)
+            assert(false && "failed to unlink the file from the filesystem");
+        file->linked = false;
+    }
+
 }
 inline size_t GET_FILE_SIZE (File& file) {
     auto& handle = file->handle;
@@ -162,6 +192,17 @@ inline size_t RESIZE_FILE (const File& file, size_t bytes) {
     size = bytes;
     return bytes;
 }
+inline void RENAME_FILE (const File& file, const std::string& path)
+{
+    if (rename(file->path.c_str(), path.c_str()) == -1)
+        throw std::system_error(errno, std::generic_category(),
+                                "failed to rename the file");
+}
+inline void DELETE_FILE (const File& file)
+{
+    _unlink(file->path.c_str());
+    file->linked = false;
+}
 inline bool LOCK_FILE(File& file, bool exclusive, bool wait)
 {
     HANDLE handle = (HANDLE)_get_osfhandle(_fileno(file->handle));
@@ -210,13 +251,12 @@ inline void UNLOCK_FILE(File& file)
 #include <sys/fcntl.h>
 #include <unistd.h>
 const size_t PAGE_SIZE = getpagesize();
-inline void GENERATE_TEMP_FILE (const File& file)
+inline void GENERATE_TEMP_FILE (const File& file, bool ulink)
 {
-    // Create the file path template (the 'X' values will be modified).
-    int result          = -1;
-    auto& file_path     = const_cast<std::string&>(file->path);
+    // Create the file path template (the 'X' values will be modified).Co
+    auto& file_path     = file->path;
     file_path           = std::filesystem::temp_directory_path().string() +
-                          std::string("IrisCodecTemporaryFile_XXXXXX");
+                          std::string("IrisCodecCache_XXXXXX");
     
     // Ask the file system to create a unique temporary file
     int file_descriptor = mkstemp(const_cast<char*>(file_path.c_str()));
@@ -224,14 +264,16 @@ inline void GENERATE_TEMP_FILE (const File& file)
         throw std::system_error(errno,std::generic_category(),
                                 "Failed to create an cache file.");
     
-    // Unlink the file from the file system so that when the program
-    // closes, the file will be immediately released. 
-    result = unlink(file_path.c_str());
-    if (result == -1)
-        assert(false && "failed to unlink the file from the filesystem");
-    
     // Open stream access to the file
     file->handle       = fdopen(file_descriptor, "wb+");
+    
+    // Unlink the file from the file system so that when the program
+    // closes, the file will be immediately released.
+    if (ulink) {
+        if (unlink(file_path.c_str()) == -1)
+            assert(false && "failed to unlink the file from the filesystem");
+        file->linked = false;
+    }
 }
 inline size_t GET_FILE_SIZE (const File& file)
 {
@@ -330,7 +372,7 @@ inline void PERFORM_FILE_MAPPING (const File& file)
                                         posix_file,0));    // Get the file descriptor, no offset
     
     // If no pointer was returned, the
-    if (file->ptr == NULL)
+    if (file->ptr == MAP_FAILED)
         throw std::system_error(errno,std::generic_category(),
                                 "failed to map the file.");
 
@@ -350,6 +392,17 @@ inline bool LOCK_FILE (const File& file, bool exclusive, bool wait)
     // Lock achieved.
     return true;
 }
+inline void RENAME_FILE (const File& file, const std::string& path)
+{
+    if (rename(file->path.c_str(), path.c_str()) == -1)
+        throw std::system_error(errno, std::generic_category(),
+                                "failed to rename the file");
+}
+inline void DELETE_FILE (const File& file)
+{
+    unlink(file->path.c_str());
+    file->linked = false;
+}
 inline void UNLOCK_FILE (const File& file)
 {
     int posix_file      = fileno(file->handle);
@@ -367,35 +420,7 @@ inline void UNMAP_FILE (BYTE*& ptr, size_t bytes)
     ptr = NULL;
 }
 #endif // END POSIX COMPLIENT
-
-__INTERNAL__File::__INTERNAL__File  (const FileOpenInfo& info) :
-    path                            (info.filePath),
-    writeAccess                     (info.writeAccess)
-{
-    
-}
-__INTERNAL__File::__INTERNAL__File  (const FileCreateInfo& info) :
-    path                            (info.filePath),
-    writeAccess                     (true)
-{
-
-}
-__INTERNAL__File::__INTERNAL__File(const CacheCreateInfo& info)
-{
-
-}
-__INTERNAL__File::~__INTERNAL__File ()
-{
-    // If the file is mapped, unmap
-    #if _WIN32
-    UNMAP_FILE(map, ptr);
-    #else
-    UNMAP_FILE      (ptr, size);
-    #endif
-    
-    // Close the file
-    if (handle) fclose (handle);
-}
+// MARK: - Iris Codec File API Calls
 File create_file (const struct FileCreateInfo &create_info)
 {
     try {
@@ -405,7 +430,7 @@ File create_file (const struct FileCreateInfo &create_info)
             throw std::runtime_error("There must be an initial file size to map");
         
         // Create a file for reading and writing in binary format.
-        #if _WIN32 
+        #if _WIN32
         fopen_s(&file->handle, file->path.data(), "wb+");
         #else
         file->handle = fopen(file->path.data(), "wb+");
@@ -446,7 +471,7 @@ File    open_file (const struct FileOpenInfo &open_info)
         // Open the file for reading or reading and writing depending on write access
         #if _WIN32
         file->handle = fopen(file->path.data(), open_info.writeAccess ? "rbR+" : "rbR");
-        #else   
+        #else
         file->handle = fopen(file->path.data(), open_info.writeAccess ? "rb+" : "rb");
         #endif
         if (!file->handle)
@@ -484,7 +509,7 @@ File create_cache_file (const struct CacheCreateInfo &create_info)
         File file = std::make_shared<__INTERNAL__File>(create_info);
         
         // Generate the unlinked and unique temporary cache file.
-        GENERATE_TEMP_FILE(file);
+        GENERATE_TEMP_FILE(file, create_info.unlink);
         
         // Set the initial cache file to about 500 MB at the page break.
         RESIZE_FILE(file, ((size_t)5E8&~(PAGE_SIZE-1))+PAGE_SIZE);
@@ -528,5 +553,81 @@ Result resize_file (const File &file, const struct FileResizeInfo &info)
             e.what()
         };
     } return IRIS_FAILURE;
+}
+Result rename_file(const File &file, const std::string &new_path)
+{
+    if (file->get_path() == new_path) return IRIS_SUCCESS;
+    if (file->linked == false)
+        return Iris::Result (
+            IRIS_FAILURE,"File is an unlinked temporary file. These do not contain a valid OS linkage and thus cannot be renamed."
+        );
+    try {
+        RENAME_FILE(file, new_path);
+        file->rename_file(new_path);
+        return IRIS_SUCCESS;
+    } catch (std::system_error &e) {
+        return Iris::Result
+        (IRIS_FAILURE, std::string("Failed to rename iris codec file: ")+e.what());
+    }   return IRIS_FAILURE;
+}
+Result delete_file(const File &file)
+{
+    if (std::filesystem::exists(file->path) == false)
+        return Iris::Result
+        (IRIS_FAILURE, "failed to delete file due to invalid file path");
+    if (file->linked == false) return IRIS_SUCCESS;
+    try {
+        DELETE_FILE(file);
+        return IRIS_SUCCESS;
+    } catch (std::system_error &e) {
+        return Iris::Result
+        (IRIS_FAILURE, std::string("Failed to delete file: ")+e.what());
+    }   return IRIS_FAILURE;
+    
+    
+}
+__INTERNAL__File::__INTERNAL__File  (const FileOpenInfo& info) :
+    path                            (info.filePath),
+    writeAccess                     (info.writeAccess),
+    linked                          (true)
+{
+    
+}
+__INTERNAL__File::__INTERNAL__File  (const FileCreateInfo& info) :
+    path                            (info.filePath),
+    writeAccess                     (true),
+    linked                          (true)
+{
+
+}
+__INTERNAL__File::__INTERNAL__File  (const CacheCreateInfo& info) :
+    writeAccess                     (true),
+    linked                          (true)
+{
+
+}
+__INTERNAL__File::~__INTERNAL__File ()
+{
+    // If the file is mapped, unmap
+    #if _WIN32
+    UNMAP_FILE(map, ptr);
+    #else
+    UNMAP_FILE      (ptr, size);
+    #endif
+    
+    // Close the file
+    if (handle) fclose (handle);
+}
+std::string __INTERNAL__File::get_path() const
+{
+    return path;
+}
+BYTE* __INTERNAL__File::get_ptr() const
+{
+    return ptr;
+}
+void __INTERNAL__File::rename_file (const std::string& new_path)
+{
+    path = new_path;
 }
 } // END IRIS CODEC NAMESPACE

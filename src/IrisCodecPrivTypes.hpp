@@ -27,6 +27,12 @@ File    create_cache_file   (const struct CacheCreateInfo&);
 /// Resize a file
 Result  resize_file         (const File&, const struct FileResizeInfo&);
 
+/// Rename a file
+Result  rename_file         (const File&, const std::string&);
+
+/// Delete the file
+Result delete_file          (const File &file);
+
 struct FileCreateInfo {
     std::string     filePath;
     size_t          initial_size = static_cast<size_t>(5E6);
@@ -41,7 +47,7 @@ struct FileResizeInfo {
 };
 struct CompressTileInfo {
     Buffer          pixelArray          = NULL;
-    Buffer          destinationOptional = NULL;
+//    Buffer          destinationOptional = NULL;
     Format          format              = Iris::FORMAT_UNDEFINED;
     Encoding        encoding            = TILE_ENCODING_UNDEFINED;
     Quality         quality             = QUALITY_DEFAULT;
@@ -53,7 +59,25 @@ struct DecompressTileInfo {
     Format          desiredFormat       = Iris::FORMAT_UNDEFINED;
     Encoding        encoding            = TILE_ENCODING_UNDEFINED;
 };
-
+struct CompressImageInfo {
+    Buffer          pixelArray          = NULL;
+//    Buffer          destinationOptional = NULL;
+    uint32_t        width               = 0;
+    uint32_t        height              = 0;
+    Format          format              = Iris::FORMAT_UNDEFINED;
+    ImageEncoding   encoding            = IMAGE_ENCODING_UNDEFINED;
+    Quality         quality             = QUALITY_DEFAULT;
+    Subsampling     subsampling         = SUBSAMPLE_DEFAULT;
+};
+struct DecompressImageInfo {
+    Buffer          compressed          = NULL;
+    Buffer          optionalDestination = NULL;
+    uint32_t        width               = 0;
+    uint32_t        height              = 0;
+    Format          sourceFormat        = Iris::FORMAT_UNDEFINED;
+    Format          desiredFormat       = Iris::FORMAT_UNDEFINED;
+    ImageEncoding   encoding            = IMAGE_ENCODING_UNDEFINED;
+};
 // MARK: - FILE ACCESS DATA STRUCTURES
 using FileLock = std::shared_ptr<class __INTERNAL__FileLock>;
 

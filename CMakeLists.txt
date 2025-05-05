@@ -112,6 +112,7 @@ FetchContent_MakeAvailable(
 # Include external projects, if needed
 include(./cmake/turbo-jpeg.cmake)
 include(./cmake/avif.cmake)
+include(./cmake/png.cmake)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Iris Codec Universal Object Build
@@ -142,6 +143,7 @@ set (
     IrisCodecDependencies
     ${TURBOJPEG_LIBRARY}
     ${AVIF_LIBRARY}
+    ${PNG_LIBRARY}
 )
 if (IRIS_BUILD_ENCODER)
     if (IRIS_USE_OPENSLIDE)
@@ -179,6 +181,9 @@ if (TURBOJPEG_EXTERNAL_PROJECT_ADD)
 endif()
 if (AVIF_EXTERNAL_PROJECT_ADD) 
     add_dependencies(IrisCodecLib Avif)
+endif()
+if (PNG_EXTERNAL_PROJECT_ADD)
+    add_dependencies(IrisCodecLib Png)
 endif()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -263,7 +268,7 @@ if (${PROJECT_IS_TOP_LEVEL} AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         NAMESPACE "IrisCodec::"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Iris
     )
-endif(${PROJECT_IS_TOP_LEVEL})
+endif(${PROJECT_IS_TOP_LEVEL} AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Python support (including installation)

@@ -11,9 +11,10 @@ namespace IrisCodec {
 using namespace Iris;
 class __INTERNAL__File {
 public:
-    const std::string               path;
+    std::string                     path;
     FILE*                           handle;
     size_t                          size;
+    bool                            linked;
 #if _WIN32
     HANDLE                          map = INVALID_HANDLE_VALUE;
 #endif
@@ -27,8 +28,9 @@ public:
     __INTERNAL__File                (const __INTERNAL__File&) = delete;
     __INTERNAL__File operator =     (const __INTERNAL__File&) = delete;
    ~__INTERNAL__File                ();
-    std::string get_path            ();
-    BYTE*       get_ptr             ();
+    std::string get_path            () const;
+    BYTE*       get_ptr             () const;
+    void       rename_file         (const std::string& new_path);
 };
 }
 #endif /* IrisCodecFile_hpp */

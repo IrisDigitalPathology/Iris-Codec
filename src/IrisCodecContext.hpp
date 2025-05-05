@@ -23,8 +23,10 @@ public:
     void        set_quality             (Quality);
     void        set_subsampling         (Subsampling);
     
-    Buffer compress_tile                (const CompressTileInfo&);
-    Buffer decompress_tile              (const DecompressTileInfo&);
+    Buffer compress_tile                (const CompressTileInfo&) const;
+    Buffer decompress_tile              (const DecompressTileInfo&) const;
+    Buffer compress_image               (const CompressImageInfo&) const;
+    Buffer decompress_image             (const DecompressImageInfo&) const;
 };
 } // END IRIS CODEC NAMESPACE
 #endif /* IrisCodecContext_hpp */

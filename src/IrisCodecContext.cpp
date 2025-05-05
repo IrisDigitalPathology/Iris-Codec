@@ -7,9 +7,9 @@
 #include <sstream>
 #include "IrisCodecPriv.hpp"
 #include "IrisCoreVulkan.hpp"
+#include <png.h>
 #include <turbojpeg.h>
 #include <avif/avif.h>
-
 static const avifRGBImage AVIF_RGB_BLANK_IMAGE {
     .width              = TILE_PIX_LENGTH,
     .height             = TILE_PIX_LENGTH,
@@ -26,7 +26,24 @@ static const avifRGBImage AVIF_RGB_BLANK_IMAGE {
     .rowBytes           = 0,
 };
 
+Iris::Version IrisCodec::get_codec_version() noexcept {
+    return {
+        .major          = CODEC_MAJOR_VERSION,
+        .minor          = CODEC_MINOR_VERSION,
+        .build          = CODEC_BUILD_NUMBER,
+    };
+}
 namespace IrisCodec {
+Context create_context() noexcept
+{
+    return create_context({
+        .device = nullptr
+    });
+}
+Context create_context(const ContextCreateInfo &info) noexcept
+{
+    return std::make_shared<__INTERNAL__Context>(info);
+}
 inline Quality CHECK_QUALITY_BOUNDS (Quality quality)
 {
     if (quality > 100) {
@@ -136,26 +153,227 @@ inline avifRGBFormat CONVERT_TO_AVIF_RGBFORMAT (Format format)
     std::cerr << "Invalid format provided, returning AVIF_RGB_FORMAT_COUNT";
     return AVIF_RGB_FORMAT_COUNT;
 }
-__INTERNAL__Context::__INTERNAL__Context    (const ContextCreateInfo& info) :
-_device                                     (nullptr)
-{
-    
-}
-__INTERNAL__Context::~__INTERNAL__Context ()
-{
-    
-}
+//static Buffer CPU_SIMD_CONVERT_FORMAT (const Buffer& src, Format s_format, Format d_format)
+//{
+//
+//}
 inline void SIMPLY_COPY (const Buffer& src, Buffer& dst)
 {
     memcpy(dst->append(src->size()), src->data(), src->size());
 }
+static void PNGCBAPI PRINT_PNG_ERROR (png_structp pp, png_const_charp error)
+{
+    // This should be in the call stack...
+    // Throw runtime error to be caught within (DE)COMPRESS_PNG calls
+    throw std::runtime_error(error);
+}
+static void PNGCBAPI PRINT_PNG_WARNING (png_structp pp, png_const_charp warning)
+{
+    std::cout << "libPNG WARNING: " << warning << "\n";
+}
+inline Buffer COMPRESS_PNG  (const Buffer &src,
+                             Format format,
+                             Quality quality,
+                             uint32_t width,
+                             uint32_t height)
+{
+    Buffer dst                  = Create_strong_buffer(src->size());
+    png_structp __png_encoder   = NULL;
+    png_infop   __png_info      = NULL;
+    
+    try {
+        __png_encoder = png_create_write_struct(PNG_LIBPNG_VER_STRING,
+                                                NULL,
+                                                PRINT_PNG_ERROR,
+                                                PRINT_PNG_WARNING);
+        
+        if (__png_encoder == NULL) throw std::runtime_error
+            ("Failed to create PNG encoder");
+        
+        __png_info = png_create_info_struct(__png_encoder);
+        if (__png_info == NULL) throw std::runtime_error
+            ("Failed to create PNG encode info");
+        
+        int bit_depth   = -1;
+        int color_type  = -1;
+        int bpp         = 0;
+        switch (format) {
+            case Iris::FORMAT_UNDEFINED:
+                break;
+            case Iris::FORMAT_B8G8R8:
+            case Iris::FORMAT_R8G8B8:
+                bit_depth   = 8;
+                color_type  = PNG_COLOR_TYPE_RGB;
+                bpp         = 3;
+                break;
+            case Iris::FORMAT_B8G8R8A8:
+            case Iris::FORMAT_R8G8B8A8:
+                bit_depth   = 8;
+                color_type  = PNG_COLOR_TYPE_RGBA;
+                bpp         = 4;
+                break;
+        } if (bit_depth < 0 || color_type < 0) throw std::runtime_error
+            ("Invalid pixel format supplied.");
+        
+        // Convert 0->100 quality (AVIF/JPEG) to 0-9uint zlib compression level
+        int zlib_lvl = static_cast<int>(round((static_cast<float>(quality)/100.f) * 9.f));
+        png_set_compression_level(__png_encoder, zlib_lvl);
+        
+        // Load a reference to the byte rows into the encoder structure
+        // for access to the raw pixel values
+        std::vector<png_bytep>row_ptrs(height);
+        for (auto row = 0, offset = 0; row < height; ++row, offset+=(width*bpp))
+            row_ptrs[row] = (png_bytep)src->data()+offset;
+        png_set_rows(__png_encoder, __png_info, row_ptrs.data());
+        
+        
+        // Set the data handling using Iris::Buffer as a source rather than file IO
+        // I just use a lambda here for ease instead of ref a callback function.
+        // See above WRITE_PNG_CALLBACK fn with required libPNG prototype args
+        png_set_write_fn(__png_encoder, (png_voidp)(&dst),[]
+                         (png_structp png_ptr, png_bytep src, size_t req_bytes)
+        {
+            // Get the destination buffer saved in the png_structp
+            auto dst = static_cast<Buffer*>(png_get_io_ptr(png_ptr));
+            if (!dst) throw std::runtime_error
+                ("WRITE_PNG_CALLBACK failed no valid dst buffer provided");
+            // Expand and get the pointer to the next available byte in the buffer
+            auto dst_ptr = (*dst)->append(req_bytes);
+            // Check the Iris Buffer destination. If buffer expansion error, this will be NULL
+            if (!dst_ptr) throw std::runtime_error
+                ("Invalid destination pointer. Output buffer expansion error");
+            // And copy into the buffer
+            memcpy(dst_ptr, src, req_bytes);
+        }, NULL);
+        
+        // Write the information about the PNG to the stream
+        png_set_IHDR(__png_encoder, __png_info,
+                     width, height,
+                     bit_depth, color_type,
+                     PNG_INTERLACE_NONE,
+                     PNG_COMPRESSION_TYPE_DEFAULT,
+                     PNG_FILTER_TYPE_DEFAULT);
+        
+        // Write the PNG to the dst buffer
+        png_write_png(__png_encoder, __png_info, PNG_TRANSFORM_IDENTITY, NULL);
+        
+        // Shrink wrap the buffer.
+        dst->shrink_to_fit();
+        
+        // Cleanup
+        png_destroy_info_struct(__png_encoder, &__png_info);
+        png_destroy_write_struct(&__png_encoder, NULL);
+    } catch (std::runtime_error &e) {
+        if (__png_info)
+            png_destroy_info_struct(__png_encoder, &__png_info);
+        if (__png_encoder)
+            png_destroy_write_struct(&__png_encoder, NULL);
+        std::stringstream log;
+        log << "Failed to compress PNG image: "
+            << e.what() << "\n";
+        throw std::runtime_error(log.str());
+    }   return dst; // Place after try-catch to satisfy MSVC
+}
+inline Buffer DECOMPRESS_PNG (const Buffer &src,
+                              Buffer dst_buffer,
+                              Format sourceFormat,
+                              Format desiredFormat,
+                              uint32_t width,
+                              uint32_t height)
+{
+    png_structp __png_decoder   = NULL;
+    png_infop   __png_info      = NULL;
+    png_infop   __end_info      = NULL;
+    
+    try {
+        if(png_sig_cmp((png_const_bytep)src->data(), 0, 8))
+            throw std::runtime_error("byte stream does not contain valid PNG signature");
+        
+        __png_decoder = png_create_read_struct (PNG_LIBPNG_VER_STRING,
+                                                NULL,
+                                                PRINT_PNG_ERROR,
+                                                PRINT_PNG_WARNING);
+        if (__png_decoder == NULL) throw std::runtime_error
+            ("Failed to create PNG decider");
+        
+        __png_info = png_create_info_struct (__png_decoder);
+        if (__png_info == NULL) throw std::runtime_error
+            ("Failed to create PNG decode info");
+        
+        __end_info = png_create_info_struct (__png_decoder);
+        if (__end_info == NULL) throw std::runtime_error
+            ("Failed to create PNG decode end info");
+
+        size_t pixel_extent     = width*height;
+        size_t bpp              = 0;
+        switch (sourceFormat) {
+            case Iris::FORMAT_UNDEFINED: break;
+            case Iris::FORMAT_B8G8R8:
+            case Iris::FORMAT_R8G8B8:
+                bpp             = 3;
+                break;
+            case Iris::FORMAT_B8G8R8A8:
+            case Iris::FORMAT_R8G8B8A8:
+                bpp             = 4;
+                break;
+        } if (bpp == 0) throw std::runtime_error
+            ("Failed to calculate destination buffer size. Invalid pixel format provided");
+
+        // Create the output image buffer
+        if (!dst_buffer || bpp*pixel_extent > dst_buffer->size())
+            dst_buffer = Create_strong_buffer(bpp*pixel_extent);
+        
+        std::vector<png_bytep>row_ptrs(height);
+        for (auto row = 0, offset = 0; row < height; ++row, offset+=(width*bpp))
+            row_ptrs[row] = (png_bytep)dst_buffer->data()+offset;
+        
+        // Set the data handling using Iris::Buffer as a source rather than file IO
+        // I just use a lambda here for ease instead of ref a callback function.
+        // See libPNG manual for required libPNG prototype args
+        std::pair<Buffer,Offset> src_stream (src,0);
+        png_set_read_fn(__png_decoder, (png_voidp)(&src_stream),[/*I just use Lambda instead*/]
+                        (png_structp png_ptr, png_bytep dst, size_t req_bytes){
+            auto src_stream = static_cast<std::pair<Buffer,Offset>*>(png_get_io_ptr(png_ptr));
+            auto& src       = src_stream->first;
+            auto& offset    = src_stream->second;
+            if (!src) throw std::runtime_error
+                ("READ_PNG_CALLBACK failed no valid source buffer provided");
+            if (offset + req_bytes > src->size()) throw std::runtime_error
+                ("READ_PNG_CALLBACK failed with more bytes requested than are available");
+            memcpy(dst, (char*)src->data()+offset, req_bytes);
+            offset += req_bytes;
+        });
+        png_set_rows(__png_decoder, __png_info, row_ptrs.data());
+        
+        png_read_png(__png_decoder, __png_info, PNG_TRANSFORM_IDENTITY, NULL);
+        png_destroy_read_struct(&__png_decoder, &__png_info, &__end_info);
+        
+        // TODO: Enable SIMD extension to convert format once stable
+        int enable_convert_format = 0; // Cause compiler warning.
+//        dst_buffer = Iris::SIMD::convert_format ({
+//            .source     = dst_buffer,
+//            .initial    = sourceFormat,
+//            .desired    = desiredFormat,
+//        });
+        
+    } catch (std::runtime_error &e) {
+        if (__png_decoder)
+            png_destroy_read_struct(&__png_decoder, &__png_info, &__end_info);
+        std::stringstream log;
+        log << "Failed to decompress PNG image: "
+            << e.what() << "\n";
+        throw std::runtime_error(log.str());
+    }   return dst_buffer; // Place after try-catch to satisfy MSVC
+}
 inline Buffer COMPRESS_JPEG (const Buffer &src,
                              Format format,
                              Quality quality,
-                             Subsampling subsampling)
+                             Subsampling subsampling,
+                             uint32_t width,
+                             uint32_t height)
 {
     tjhandle turbo_handle = NULL;
-    auto dst = Create_strong_buffer(tjBufSize(TILE_PIX_LENGTH, TILE_PIX_LENGTH,
+    auto dst = Create_strong_buffer(tjBufSize(width, height,
                                               CONVERT_TO_TJSAMP(subsampling)));
     try {
         size_t size     = dst->capacity();
@@ -173,7 +391,7 @@ inline Buffer COMPRESS_JPEG (const Buffer &src,
                                      std::string(tj3GetErrorStr(turbo_handle)));
         // Compress the image
         if (tj3Compress8(turbo_handle, static_cast<BYTE*>(src->data()),
-                         TILE_PIX_LENGTH, 0, TILE_PIX_LENGTH,
+                         width, 0, height,
                          CONVERT_TO_TJPIXEL_FORMAT(format),
                          &dst_ptr, &size))
             throw std::runtime_error("TURBO_JPEG failed to compress tile data --" +
@@ -196,24 +414,27 @@ inline Buffer COMPRESS_JPEG (const Buffer &src,
         return Buffer();
     }   return Buffer();
 }
-inline Buffer DECOMPRESS_JPEG (const DecompressTileInfo& info)
+inline Buffer DECOMPRESS_JPEG (const Buffer &compressed,
+                               Buffer dst_buffer,
+                               Format desired_format,
+                               uint32_t width,
+                               uint32_t height)
 {
-    auto&       src_buffer  = info.compressed;
-    Buffer      dst_buffer  = info.optionalDestination;
-    TJPF        format      = CONVERT_TO_TJPIXEL_FORMAT(info.desiredFormat);
+    auto&       src_buffer  = compressed;
+    TJPF        format      = CONVERT_TO_TJPIXEL_FORMAT(desired_format);
     tjhandle    tjhandle    = NULL;
-    size_t      buffer_size = TILE_PIX_AREA*BITS_PER_PIXEL(info.desiredFormat);
+    size_t      buffer_size = width*height*BITS_PER_PIXEL(desired_format);
 
     if (format == TJPF_UNKNOWN || !buffer_size) throw std::runtime_error
         ("DECOMPRESS_JPEG failed due to undefined destination pixel format");
     
-    if (!dst_buffer || buffer_size > dst_buffer->size())
+    if (!dst_buffer || buffer_size > dst_buffer->capacity())
         dst_buffer = Create_strong_buffer(buffer_size);
     
     try {
         tjhandle = tj3Init(TJINIT_DECOMPRESS);
-        tj3Set(tjhandle, TJPARAM_JPEGWIDTH,  TILE_PIX_LENGTH);
-        tj3Set(tjhandle, TJPARAM_JPEGHEIGHT, TILE_PIX_LENGTH);
+        tj3Set(tjhandle, TJPARAM_JPEGWIDTH,  width);
+        tj3Set(tjhandle, TJPARAM_JPEGHEIGHT, height);
         int result = tj3Decompress8
         (tjhandle, static_cast<const BYTE*>(src_buffer->data()),
          src_buffer->size(),
@@ -223,6 +444,8 @@ inline Buffer DECOMPRESS_JPEG (const DecompressTileInfo& info)
         if (result) throw std::runtime_error
             ("DECOMPRESS_JPEG failed with tj3error " +
              std::string(tj3GetErrorStr(tjhandle)));
+        
+        dst_buffer->set_size(buffer_size);
         
     } catch (std::runtime_error& error) {
         std::cerr   << "Failed to decompress JPEG tile: "
@@ -236,7 +459,9 @@ inline Buffer DECOMPRESS_JPEG (const DecompressTileInfo& info)
 inline Buffer COMPRESS_AVIF_CPU (const Buffer &src_buffer,
                                  Format format,
                                  Quality quality,
-                                 Subsampling subsampling)
+                                 Subsampling subsampling,
+                                 uint32_t width,
+                                 uint32_t height)
 {
     Buffer          dst_buffer  = nullptr;
     avifImage*      image       = nullptr;
@@ -246,7 +471,7 @@ inline Buffer COMPRESS_AVIF_CPU (const Buffer &src_buffer,
     
     try {
         image                   = avifImageCreate
-        (TILE_PIX_LENGTH, TILE_PIX_LENGTH,
+        (width, height,
          BIT_DEPTH(format),
          CONVERT_TO_AVIF_SAMP(subsampling));
         
@@ -258,7 +483,7 @@ inline Buffer COMPRESS_AVIF_CPU (const Buffer &src_buffer,
         rgb.format      = CONVERT_TO_AVIF_RGBFORMAT(format);
         rgb.maxThreads  = 1;
         rgb.pixels      = (uint8_t*)src_buffer->data();
-        rgb.rowBytes    = TILE_PIX_LENGTH * BITS_PER_PIXEL(format);
+        rgb.rowBytes    = width * BITS_PER_PIXEL(format);
         
         auto result = avifImageRGBToYUV(image, &rgb);
         if (result != AVIF_RESULT_OK) throw std::runtime_error
@@ -300,12 +525,15 @@ inline Buffer COMPRESS_AVIF_CPU (const Buffer &src_buffer,
     avifRWDataFree (&avifOutput);
     return dst_buffer;
 }
-inline Buffer DECOMPRESS_AVIF_CPU (const DecompressTileInfo& info)
+inline Buffer DECOMPRESS_AVIF_CPU (const Buffer &compressed,
+                                   Buffer dst_buffer,
+                                   Format desired_format,
+                                   uint32_t width,
+                                   uint32_t height)
 {
-    auto&           src_buffer  = info.compressed;
-    Buffer          dst_buffer  = info.optionalDestination;
+    auto&           src_buffer  = compressed;
     avifDecoder*    decoder     = NULL;
-    size_t          buffer_size = TILE_PIX_AREA * BITS_PER_PIXEL(info.desiredFormat);
+    size_t          buffer_size = width*height*BITS_PER_PIXEL(desired_format);
     
     // Reallocate buffer if insufficient space provided
     if (!dst_buffer || dst_buffer->size() < buffer_size)
@@ -313,9 +541,9 @@ inline Buffer DECOMPRESS_AVIF_CPU (const DecompressTileInfo& info)
     
     try {
         avifRGBImage rgb    = AVIF_RGB_BLANK_IMAGE;
-        rgb.format          = CONVERT_TO_AVIF_RGBFORMAT(info.desiredFormat);
-        rgb.rowBytes        = TILE_PIX_LENGTH * BITS_PER_PIXEL(info.desiredFormat);
-        rgb.depth           = BIT_DEPTH(info.desiredFormat);
+        rgb.format          = CONVERT_TO_AVIF_RGBFORMAT(desired_format);
+        rgb.rowBytes        = width * BITS_PER_PIXEL(desired_format);
+        rgb.depth           = BIT_DEPTH(desired_format);
         rgb.pixels          = (uint8_t*)dst_buffer->data();
         
         if (rgb.format == AVIF_RGB_FORMAT_COUNT || !buffer_size) throw std::runtime_error
@@ -356,41 +584,128 @@ inline Buffer DECOMPRESS_AVIF_CPU (const DecompressTileInfo& info)
     if (decoder) avifDecoderDestroy(decoder);
     return dst_buffer;
 }
-Buffer __INTERNAL__Context::compress_tile(const CompressTileInfo &info)
+__INTERNAL__Context::__INTERNAL__Context    (const ContextCreateInfo& info) :
+_device                                     (nullptr)
 {
-    Buffer dst;
+    
+}
+__INTERNAL__Context::~__INTERNAL__Context ()
+{
+    
+}
+Buffer __INTERNAL__Context::compress_tile(const CompressTileInfo &info) const
+{
     switch (info.encoding) {
         case TILE_ENCODING_UNDEFINED:
             throw std::runtime_error("Encoding format in CompressTileInfo is undefined");
             return Buffer();
         case TILE_ENCODING_JPEG:
-            return COMPRESS_JPEG (info.pixelArray, info.format, info.quality, info.subsampling);
+            return COMPRESS_JPEG        (info.pixelArray,
+                                         info.format,
+                                         info.quality,
+                                         info.subsampling,
+                                         TILE_PIX_LENGTH,
+                                         TILE_PIX_LENGTH);
         case TILE_ENCODING_AVIF:
             if (_gpuAV1Encode) {
                 assert(false && "HARDWARE ENCODER AV1 IMPLEMENTATION NOT YET BUILT");
-            } return COMPRESS_AVIF_CPU (info.pixelArray, info.format, info.quality, info.subsampling);
+            } return COMPRESS_AVIF_CPU (info.pixelArray,
+                                        info.format,
+                                        info.quality,
+                                        info.subsampling,
+                                        TILE_PIX_LENGTH,
+                                        TILE_PIX_LENGTH);
             break;
         case TILE_ENCODING_IRIS:
             assert(false && "IMPLEMENTATION NOT YET BUILT");
             break;
-    } return dst;
-
-//    if (info.destinationOptional && info.destinationOptional->capacity() >= dst_size)
+    } throw std::runtime_error("compress_tile failed with nonsense encoding format in CompressTileInfo");
 }
-Buffer __INTERNAL__Context::decompress_tile(const DecompressTileInfo &info)
+Buffer __INTERNAL__Context::decompress_tile(const DecompressTileInfo &info) const
 {
     switch (info.encoding) {
         case TILE_ENCODING_UNDEFINED:
             throw std::runtime_error("Encoding format in DecompressTileInfo is undefined");
         case TILE_ENCODING_JPEG:
-            return DECOMPRESS_JPEG(info);
+            return DECOMPRESS_JPEG      (info.compressed,
+                                         info.optionalDestination,
+                                         info.desiredFormat,
+                                         TILE_PIX_LENGTH,
+                                         TILE_PIX_LENGTH);
         case TILE_ENCODING_AVIF:
             if (_gpuAV1Decode) {
                 assert(false && "HARDWARE ENCODER AV1 IMPLEMENTATION NOT YET BUILT");
-            } return DECOMPRESS_AVIF_CPU(info);
+            } return DECOMPRESS_AVIF_CPU (info.compressed,
+                                          info.optionalDestination,
+                                          info.desiredFormat,
+                                          TILE_PIX_LENGTH,
+                                          TILE_PIX_LENGTH);
         case TILE_ENCODING_IRIS:
             assert(false && "IMPLEMENTATION NOT YET BUILT");
             break;
-    } return Buffer();
+    } throw std::runtime_error("decompress_tile failed with nonsense encoding format in DecompressTileInfo");
+}
+Buffer __INTERNAL__Context::compress_image(const CompressImageInfo &info) const
+{
+    switch (info.encoding) {
+        case IMAGE_ENCODING_UNDEFINED:
+            throw std::runtime_error("Encoding format in CompressImageInfo is undefined");
+        case IMAGE_ENCODING_PNG:
+            return COMPRESS_PNG         (info.pixelArray,
+                                         info.format,
+                                         info.quality,
+                                         info.width,
+                                         info.height);
+            
+            break;
+        case IMAGE_ENCODING_JPEG:
+            return COMPRESS_JPEG        (info.pixelArray,
+                                         info.format,
+                                         info.quality,
+                                         info.subsampling,
+                                         info.width,
+                                         info.height);
+            
+        case IMAGE_ENCODING_AVIF:
+            if (_gpuAV1Decode) {
+                assert(false && "HARDWARE ENCODER AV1 IMPLEMENTATION NOT YET BUILT");
+            }
+            return COMPRESS_AVIF_CPU    (info.pixelArray,
+                                         info.format,
+                                         info.quality,
+                                         info.subsampling,
+                                         info.width,
+                                         info.height);
+    } throw std::runtime_error("compress_image failed with nonsense encoding format in CompressImageInfo");
+}
+Buffer __INTERNAL__Context::decompress_image(const DecompressImageInfo &info) const
+{
+    switch (info.encoding) {
+        case IMAGE_ENCODING_UNDEFINED:
+            throw std::runtime_error("Encoding format in DecompressImageInfo is undefined");
+        case IMAGE_ENCODING_PNG:
+            return DECOMPRESS_PNG       (info.compressed,
+                                         info.optionalDestination,
+                                         info.sourceFormat,
+                                         info.desiredFormat,
+                                         info.width,
+                                         info.height);
+            
+        case IMAGE_ENCODING_JPEG:
+            return DECOMPRESS_JPEG      (info.compressed,
+                                         info.optionalDestination,
+                                         info.desiredFormat,
+                                         info.width,
+                                         info.height);
+            
+        case IMAGE_ENCODING_AVIF:
+            if (_gpuAV1Decode) {
+                assert(false && "HARDWARE ENCODER AV1 IMPLEMENTATION NOT YET BUILT");
+            } return DECOMPRESS_AVIF_CPU (info.compressed,
+                                          info.optionalDestination,
+                                          info.desiredFormat,
+                                          info.width,
+                                          info.height);
+    } throw std::runtime_error("decompress_tile failed with nonsense encoding format in DecompressImageInfo");
 }
 } // END IRIS CODEC NAMESPACE
