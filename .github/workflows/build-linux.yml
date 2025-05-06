@@ -48,7 +48,7 @@ jobs:
     
     - name: Fetch Dependencies
       run: |
-        sudo apt install libjpeg-turbo-official libavif-dev openslide-tools python3-dev -y
+        sudo apt install libjpeg-turbo-official libavif-dev libpng-dev zlib1g-dev openslide-tools python3-dev -y
 
     
     - name: Configure CMake
