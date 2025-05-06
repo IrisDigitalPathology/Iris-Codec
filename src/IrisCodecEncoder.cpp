@@ -699,15 +699,18 @@ inline Offset RESERVE_METADATA (const File& file, atomic_uint64& offset)
 inline Metadata READ_METADATA (const EncoderSource& source) {
     switch (source.sourceType) {
         case EncoderSource::ENCODER_SRC_UNDEFINED:
-            throw std::runtime_error("READ_METADATA failed due to undefined source type");
+            throw std::runtime_error
+            ("READ_METADATA failed due to ENCODER_SRC_UNDEFINED source type");
         case EncoderSource::ENCODER_SRC_IRISSLIDE:
             return source.irisSlide->get_slide_info().metadata;
         case EncoderSource::ENCODER_SRC_OPENSLIDE:
             return READ_OPENSLIDE_METADATA(source);
         case EncoderSource::ENCODER_SRC_APERIO:
             //TODO: APERIO READ METADATA
-            throw std::runtime_error("READ_METADATA failed as APERIO TIFF reads not yet built; Use openslide for the moment");
-    }
+            throw std::runtime_error
+            ("READ_METADATA failed as APERIO TIFF reads not yet built; Use openslide for the moment");
+    } throw std::runtime_error
+    ("READ_METADATA due to invalid source type value ("+std::to_string(source.sourceType)+")");
 }
 inline Offset STORE_ICC (const File& file,
                          const Metadata& metadata,
@@ -1095,7 +1098,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
             goto ENCODING_FAILED;
         }
         
-        auto rename = IrisCodec::rename_file(file, dst_file_path);
+        auto rename = IrisCodec::rename_file(file, dst_file_path.string());
         if (rename & IRIS_FAILURE) {
             _status.store(ENCODER_ERROR);
             MutexLock __ (_tracker.error_msg_mutex);

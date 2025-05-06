@@ -95,7 +95,7 @@ FetchContent_Declare (
 # Do not export the IFE API. 
 set(IFE_BUILD_SHARED OFF)
 set(IFE_BUILD_STATIC OFF)
-add_compile_definitions(IFE_EXPORT_API=false)
+add_compile_definitions(IFE_EXPORT=)
 FetchContent_Declare (
     IrisFileExtension
     GIT_REPOSITORY https://github.com/IrisDigitalPathology/Iris-File-Extension.git
@@ -104,10 +104,12 @@ FetchContent_Declare (
     FETCHCONTENT_UPDATES_DISCONNECTED ON
     FETCHCONTENT_QUIET ON
 )
+message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 FetchContent_MakeAvailable(
     IrisHeaders
     IrisFileExtension
 )
+message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
 # Include external projects, if needed
 include(./cmake/turbo-jpeg.cmake)
@@ -232,6 +234,10 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         PRIVATE ${IrisCodecInclude}
         PRIVATE ${OPENSLIDE_DIR}
     )
+    target_compile_definitions (
+        IrisCodecEncoder
+        PRIVATE IRIS_EXPORT_API=true 
+    )
     target_link_libraries (
         IrisCodecEncoder
         PRIVATE IrisHeaders
@@ -306,6 +312,10 @@ if(IRIS_BUILD_PYTHON)
         TARGET IrisCodecPython
         PROPERTY OUTPUT_NAME Iris
     )
+    target_compile_definitions (
+        IrisCodecPython
+        PRIVATE IRIS_EXPORT_API=true 
+    )
     target_link_libraries (
         IrisCodecPython
         PRIVATE IrisHeaders
@@ -331,6 +341,10 @@ if(IRIS_BUILD_PYTHON)
         set_property(
             TARGET IrisCodecEncoderPython
             PROPERTY OUTPUT_NAME Encoder
+        )
+        target_compile_definitions (
+            IrisCodecEncoderPython
+            PRIVATE IRIS_EXPORT_API=true 
         )
         target_link_libraries (
             IrisCodecEncoderPython
