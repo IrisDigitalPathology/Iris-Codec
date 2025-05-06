@@ -79,7 +79,7 @@ int main(int argc, char const *argv[])
     std::locale::global(std::locale("en_US.UTF-8"));
     
     bool strip_metadata = false;
-    auto encoding       = IrisCodec::ENCODING_DEFAULT;
+    auto encoding       = IrisCodec::TILE_ENCODING_DEFAULT;
     if (argc < 2) {
         std::cerr << help_statement;
         return EXIT_FAILURE;
