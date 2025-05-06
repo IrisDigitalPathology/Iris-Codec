@@ -38,6 +38,7 @@ if (NOT AVIF_LIBRARY OR NOT AVIF_INCLUDE)
         GIT_TAG "a28899a" #"origin/main"
         GIT_SHALLOW ON
         UPDATE_DISCONNECTED ON
+        BUILD_BYPRODUCTS ${AVIF_LIBRARY} # Ninja compatability
         CMAKE_ARGS 
             -D CMAKE_INSTALL_PREFIX:PATH=${AVIF_INSTALL_DIR}
             -D BUILD_SHARED_LIBS=OFF 
