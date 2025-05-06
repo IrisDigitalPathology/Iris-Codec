@@ -96,4 +96,20 @@ for y in range(layer_extent.y_tiles):
     composite.paste(Image.fromarray(slide.read_slide_tile(layer_index, tile_index)),(256*x,256*y)) #Iris tiles are always 256 px in each dim
 composite.show()
 ```
-**CAUTION:** Despite Iris' native fast read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images.
+**CAUTION:** Despite Iris' native fast read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images. I do not recommend doing this above layer 0 or 1 as it may be onerous for PIL.Image 
+
+The API for metadata is designed to be intuitive and pythonic. Below shows how to investigate the metadata attribute array and view a thumbnail image, if one is present within the slide file.
+```py
+result, info = slide.get_info()
+if (result.success() == False):
+    raise Exception(f'Failed to read slide information: {result.message()}')
+
+print ("Slide metadata attributes")
+for attribute in info.metadata.attributes:
+    print(f"{attribute}: {info.metadata.attributes[attribute]}")
+
+from PIL import Image
+if ('thumbnail' in info.metadata.associated_images):
+    image = Image.fromarray(slide.read_associated_image('thumbnail'))
+    image.show()
+```

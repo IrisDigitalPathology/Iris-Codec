@@ -306,4 +306,20 @@ for y in range(layer_extent.y_tiles):
 composite.show()
 ```
 >[!CAUTION]
->Despite Iris' native fast read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images.
+>Despite Iris' native fast read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images. I do not recommend doing this above layer 0 or 1 as it may be onerous for PIL.Image 
+
+Investigate the metadata attribute array and view a thumbnail image
+```py
+result, info = slide.get_info()
+if (result.success() == False):
+    raise Exception(f'Failed to read slide information: {result.message()}')
+
+print ("Slide metadata attributes")
+for attribute in info.metadata.attributes:
+    print(f"{attribute}: {info.metadata.attributes[attribute]}")
+
+from PIL import Image
+if ('thumbnail' in info.metadata.associated_images):
+    image = Image.fromarray(slide.read_associated_image('thumbnail'))
+    image.show()
+```

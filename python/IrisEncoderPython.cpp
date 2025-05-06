@@ -45,8 +45,8 @@ inline std::string to_string(Format format)
 }
 inline Encoder _create_encoder (const std::string& src_path,
                                 const std::string& dst_path,
-                                Encoding desired_encoding,
-                                Format desired_format,
+                                IrisCodec::Encoding desired_encoding,
+                                Iris::Format desired_format,
                                 Context context = NULL) {
     EncodeSlideInfo encoder_info {
         .srcFilePath        = src_path,
@@ -109,9 +109,9 @@ PYBIND11_MODULE(Encoder, m)
           "File path to the source WSI file (must be a compatible WSI format understood by OpenSlide)",
           py::arg("outdir") = std::string(),
           "File path to the output file directory. The encoder will name the file XXX.iris where XXX represents the previous file name (ex /path/to/slide.svs will be named /outdir/slide.iris)",
-          py::arg("desired_encoding") = IrisCodec::ENCODING_DEFAULT,
+          py::arg("desired_encoding") = IrisCodec::TILE_ENCODING_DEFAULT,
           "Encoding algorithm used for tile compression. Please refer to 'Iris.Codec.Encoding' values for more information related to encoding types. This will default to the current Iris Codec version's implemenation of 'Default encoding'. ",
-          py::arg("desired_byte_format") = Iris::FORMAT_R8G8B8,
+          py::arg("desired_byte_format") = Iris::FORMAT_R8G8B8A8,
           "Desired pixel byte format",
           py::arg("codec_context") = IrisCodec::Context(),
           "Iris Codec encoding context for GPU based compression");

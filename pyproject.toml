@@ -6,7 +6,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "Iris-Codec" 
-version = "2025.1.0a3" 
+version = "2025.2.0a1" 
 
 description = "Portable and blazingly fast whole slide image compression and serialization library for the Iris File Extension"
 readme = "./python/README.md"

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import numpy
 import typing
 import typing_extensions
 from . import Codec
@@ -9,6 +10,8 @@ class Buffer:
         ...
     @typing.overload
     def __init__(self: typing_extensions.Buffer, arg0: BufferStrength, arg1: int) -> None:
+        ...
+    def data(self: typing_extensions.Buffer) -> numpy.ndarray[numpy.uint8]:
         ...
     def get_strength(self: typing_extensions.Buffer) -> BufferStrength:
         ...
@@ -50,6 +53,8 @@ class BufferStrength:
     def value(self) -> int:
         ...
 class Extent:
+    def __repr__(self) -> str:
+        ...
     @property
     def height(self) -> int:
         ...
@@ -103,6 +108,8 @@ class Format:
     def value(self) -> int:
         ...
 class LayerExtent:
+    def __repr__(self) -> str:
+        ...
     @property
     def downsample(self) -> float:
         ...
@@ -116,6 +123,8 @@ class LayerExtent:
     def y_tiles(self) -> int:
         ...
 class Result:
+    def __repr__(self) -> str:
+        ...
     def success(self) -> bool:
         ...
     @property
@@ -138,12 +147,12 @@ class ResultFlag:
     
       UNDEFINED_ERROR
     """
-    Failure: typing.ClassVar[ResultFlag]  # value = <ResultFlag.Failure: 1>
+    Failure: typing.ClassVar[ResultFlag]  # value = <ResultFlag.Failure: 65535>
     Success: typing.ClassVar[ResultFlag]  # value = <ResultFlag.Success: 0>
     UNDEFINED_ERROR: typing.ClassVar[ResultFlag]  # value = <ResultFlag.UNDEFINED_ERROR: 4294967295>
-    Uninitialized: typing.ClassVar[ResultFlag]  # value = <ResultFlag.Uninitialized: 2>
-    ValidationFailure: typing.ClassVar[ResultFlag]  # value = <ResultFlag.ValidationFailure: 4>
-    __members__: typing.ClassVar[dict[str, ResultFlag]]  # value = {'Success': <ResultFlag.Success: 0>, 'Failure': <ResultFlag.Failure: 1>, 'Uninitialized': <ResultFlag.Uninitialized: 2>, 'ValidationFailure': <ResultFlag.ValidationFailure: 4>, 'UNDEFINED_ERROR': <ResultFlag.UNDEFINED_ERROR: 4294967295>}
+    Uninitialized: typing.ClassVar[ResultFlag]  # value = <ResultFlag.Uninitialized: 1>
+    ValidationFailure: typing.ClassVar[ResultFlag]  # value = <ResultFlag.ValidationFailure: 2>
+    __members__: typing.ClassVar[dict[str, ResultFlag]]  # value = {'Success': <ResultFlag.Success: 0>, 'Failure': <ResultFlag.Failure: 65535>, 'Uninitialized': <ResultFlag.Uninitialized: 1>, 'ValidationFailure': <ResultFlag.ValidationFailure: 2>, 'UNDEFINED_ERROR': <ResultFlag.UNDEFINED_ERROR: 4294967295>}
     def __eq__(self, other: typing.Any) -> bool:
         ...
     def __getstate__(self) -> int:
