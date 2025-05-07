@@ -36,11 +36,11 @@ function(get_codec_version)
         message(FATAL_ERROR "Couldn't parse the Iris Codec build iteration")
     endif()
 
-    set(VERSION_STRING "${MAJOR_VERSION}.${MINOR_VERSION}.${BUILD_NUMBER}" PARENT_SCOPE)
+    set(IRIS_CODEC_VERSION_STRING "${MAJOR_VERSION}.${MINOR_VERSION}.${BUILD_NUMBER}" PARENT_SCOPE)
 endfunction()
 
 get_codec_version()
-message(STATUS "BUILDING IRIS CODEC COMMUNITY MODULE VERSION v" ${VERSION_STRING})
+message(STATUS "BUILDING IRIS CODEC COMMUNITY MODULE VERSION v" ${IRIS_CODEC_VERSION_STRING})
 if (IRIS_BUILD_DEPENDENCIES)
     message(STATUS "Iris Codec is configured to build all dependencies and statically link into a single self-contained binary.")
 endif()
@@ -74,7 +74,7 @@ FetchContent_MakeAvailable(
 PROJECT (
     IrisCodec
     LANGUAGES CXX
-    VERSION ${VERSION_STRING}
+    VERSION ${IRIS_CODEC_VERSION_STRING}
 )
 
 option(IRIS_BUILD_SHARED "Build IrisCodec Shared Library" ON)
@@ -95,6 +95,11 @@ FetchContent_Declare (
 # Do not export the IFE API. 
 set(IFE_BUILD_SHARED OFF)
 set(IFE_BUILD_STATIC OFF)
+# NOTE: The following IFE_Export definition
+# is IFE_EXPORT= to blank out import/export
+# declarations. This is important as we use
+# intermediate objects rather than link to
+# the Iris File Extension Library (MSVC)
 add_compile_definitions(IFE_EXPORT=)
 FetchContent_Declare (
     IrisFileExtension
@@ -111,11 +116,26 @@ FetchContent_MakeAvailable(
 )
 message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
-# Include external projects, if needed
+# Threading
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads)
+
+# Include external projects
 include(./cmake/turbo-jpeg.cmake)
 include(./cmake/avif.cmake)
 include(./cmake/png.cmake)
 
+# Include Encoder-required external projects
+if (IRIS_BUILD_ENCODER)
+    if (IRIS_USE_OPENSLIDE)
+        add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=1)
+        message(STATUS "BUILDING IRIS CODEC ENCODER: Encoding from vendor files requires Openslide")
+        include(./cmake/openslide.cmake)
+        message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
+    else ()
+        add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=0)
+    endif()
+endif(IRIS_BUILD_ENCODER)
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Iris Codec Universal Object Build
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -147,17 +167,11 @@ set (
     ${AVIF_LIBRARY}
     ${PNG_LIBRARY}
 )
-if (IRIS_BUILD_ENCODER)
-    if (IRIS_USE_OPENSLIDE)
-        add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=1)
-        message(STATUS "BUILDING IRIS CODEC ENCODER: Encoding from vendor files requires Openslide")
-        include(./cmake/openslide.cmake)
-        message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
-    else ()
-        add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=0)
-    endif()
-endif(IRIS_BUILD_ENCODER)
-
+set (
+    IrisCodecEncoderDependencies
+    ${OPENSLIDE_LIB}
+    Threads::Threads
+)
 add_library(
     IrisCodecLib OBJECT
     ${IrisCodecSources}
@@ -325,42 +339,39 @@ if(IRIS_BUILD_PYTHON)
         TARGETS IrisCodecPython
         DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris
     )
-    if (IRIS_BUILD_ENCODER)
-        pybind11_add_module(
-            IrisCodecEncoderPython
-            $<TARGET_OBJECTS:IrisFileExtensionLib>
-            $<TARGET_OBJECTS:IrisCodecLib>
-            ${IrisCodecEncoderSources}
-            ${PROJECT_SOURCE_DIR}/python/IrisEncoderPython.cpp
-        )
-        target_include_directories (
-            IrisCodecEncoderPython 
-            PRIVATE ${IrisCodecInclude}
-            PRIVATE ${OPENSLIDE_DIR}
-        )
-        set_property(
-            TARGET IrisCodecEncoderPython
-            PROPERTY OUTPUT_NAME Encoder
-        )
-        target_compile_definitions (
-            IrisCodecEncoderPython
-            PRIVATE IRIS_EXPORT_API=true 
-        )
-        target_link_libraries (
-            IrisCodecEncoderPython
-            PRIVATE IrisHeaders
-            PRIVATE ${IrisCodecDependencies}
-            PRIVATE ${OPENSLIDE_LIB}
-        )
-        install(
-            TARGETS IrisCodecEncoderPython
-            DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/Encoder
-        )
-    endif()
-    
+    pybind11_add_module(
+        IrisCodecEncoderPython
+        $<TARGET_OBJECTS:IrisFileExtensionLib>
+        $<TARGET_OBJECTS:IrisCodecLib>
+        ${IrisCodecEncoderSources}
+        ${PROJECT_SOURCE_DIR}/python/IrisEncoderPython.cpp
+    )
+    target_include_directories (
+        IrisCodecEncoderPython 
+        PRIVATE ${IrisCodecInclude}
+        PRIVATE ${OPENSLIDE_DIR}
+    )
+    set_property(
+        TARGET IrisCodecEncoderPython
+        PROPERTY OUTPUT_NAME Encoder
+    )
+    target_compile_definitions (
+        IrisCodecEncoderPython
+        PRIVATE IRIS_EXPORT_API=true 
+    )
+    target_link_libraries (
+        IrisCodecEncoderPython
+        PRIVATE IrisHeaders
+        PRIVATE ${IrisCodecDependencies}
+        PRIVATE ${OPENSLIDE_LIB}
+    )
+    install(
+        TARGETS IrisCodecEncoderPython
+        DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/Encoder
+    )
+    # Copy install the python source files
     install(
         DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris 
         DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}
     )
-        
 endif()
