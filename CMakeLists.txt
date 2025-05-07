@@ -10,6 +10,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+option(IRIS_BUILD_SHARED "Build IrisCodec Shared Library" ON)
+option(IRIS_BUILD_STATIC "Build IrisCodec Static Library" ON)
+option(IRIS_BUILD_ENCODER "Build the IrisCodec Encoder executable" ON)
+option(IRIS_BUILD_PYTHON "Build IrisCodec Python modules" OFF)
+option(IRIS_BUILD_DEPENDENCIES "Build all dependencies and statically link into self-contained binary" OFF)
+option(IRIS_USE_OPENSLIDE "Use openslide in the encoder (currently not supported on Windows Arm64)" ON)
+
 function(get_codec_version)
     set(codec_priv_header "${CMAKE_CURRENT_SOURCE_DIR}/src/IrisCodecPriv.hpp")
     if (NOT EXISTS ${codec_priv_header})
@@ -47,6 +54,10 @@ endif()
 if (IRIS_BUILD_PYTHON)
     message(STATUS "Iris Codec is configured to build Python Module")
 endif()
+if (NOT IRIS_BUILD_ENCODER)
+    message(WARNING "Iris Codec is configured with IRIS_BUILD_ENCODER=OFF and will build the DECODER ONLY.")
+endif()
+
 
 FetchContent_Declare (
     VulkanHeaders
@@ -76,14 +87,6 @@ PROJECT (
     LANGUAGES CXX
     VERSION ${IRIS_CODEC_VERSION_STRING}
 )
-
-option(IRIS_BUILD_SHARED "Build IrisCodec Shared Library" ON)
-option(IRIS_BUILD_STATIC "Build IrisCodec Static Library" ON)
-option(IRIS_BUILD_ENCODER "Build the IrisCodec Encoder executable" ON)
-option(IRIS_BUILD_PYTHON "Build IrisCodec Python modules" OFF)
-option(IRIS_BUILD_DEPENDENCIES "Build all dependencies and statically link into self-contained binary" OFF)
-option(IRIS_USE_OPENSLIDE "Use openslide in the encoder (currently not supported on Windows Arm64)" ON)
-
 
 FetchContent_Declare (
     IrisHeaders
@@ -169,6 +172,7 @@ set (
 )
 set (
     IrisCodecEncoderDependencies
+    ${IrisCodecDependencies}
     ${OPENSLIDE_LIB}
     Threads::Threads
 )
@@ -255,8 +259,7 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
     target_link_libraries (
         IrisCodecEncoder
         PRIVATE IrisHeaders
-        PRIVATE ${IrisCodecDependencies}
-        PRIVATE ${OPENSLIDE_LIB}
+        PRIVATE ${IrisCodecEncoderDependencies}
     )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodecEncoder)
 endif()
@@ -312,6 +315,14 @@ if(IRIS_BUILD_PYTHON)
     endif ()
     string (REPLACE "\\" "/" IRIS_INSTALL_PYTHON_LIBDIR ${CMAKE_INSTALL_PYTHON_LIBDIR})
     message(STATUS "Installing python modules at: ${IRIS_INSTALL_PYTHON_LIBDIR}")
+
+    # Copy install the python source files
+    install(
+        DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris 
+        DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}
+        PATTERN "Encoder" EXCLUDE
+    )
+    # Then build the Python module
     pybind11_add_module(
         IrisCodecPython
         $<TARGET_OBJECTS:IrisFileExtensionLib>
@@ -339,39 +350,41 @@ if(IRIS_BUILD_PYTHON)
         TARGETS IrisCodecPython
         DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris
     )
-    pybind11_add_module(
-        IrisCodecEncoderPython
-        $<TARGET_OBJECTS:IrisFileExtensionLib>
-        $<TARGET_OBJECTS:IrisCodecLib>
-        ${IrisCodecEncoderSources}
-        ${PROJECT_SOURCE_DIR}/python/IrisEncoderPython.cpp
-    )
-    target_include_directories (
-        IrisCodecEncoderPython 
-        PRIVATE ${IrisCodecInclude}
-        PRIVATE ${OPENSLIDE_DIR}
-    )
-    set_property(
-        TARGET IrisCodecEncoderPython
-        PROPERTY OUTPUT_NAME Encoder
-    )
-    target_compile_definitions (
-        IrisCodecEncoderPython
-        PRIVATE IRIS_EXPORT_API=true 
-    )
-    target_link_libraries (
-        IrisCodecEncoderPython
-        PRIVATE IrisHeaders
-        PRIVATE ${IrisCodecDependencies}
-        PRIVATE ${OPENSLIDE_LIB}
-    )
-    install(
-        TARGETS IrisCodecEncoderPython
-        DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/Encoder
-    )
-    # Copy install the python source files
-    install(
-        DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris 
-        DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}
-    )
+    if (IRIS_BUILD_ENCODER)
+        # Copy install the python source files
+        install(
+            DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris/Encoder
+            DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/Encoder
+        )
+        # Then build the Python module
+        pybind11_add_module(
+            IrisCodecEncoderPython
+            $<TARGET_OBJECTS:IrisFileExtensionLib>
+            $<TARGET_OBJECTS:IrisCodecLib>
+            ${IrisCodecEncoderSources}
+            ${PROJECT_SOURCE_DIR}/python/IrisEncoderPython.cpp
+        )
+        target_include_directories (
+            IrisCodecEncoderPython 
+            PRIVATE ${IrisCodecInclude}
+            PRIVATE ${OPENSLIDE_DIR}
+        )
+        set_property(
+            TARGET IrisCodecEncoderPython
+            PROPERTY OUTPUT_NAME Encoder
+        )
+        target_compile_definitions (
+            IrisCodecEncoderPython
+            PRIVATE IRIS_EXPORT_API=true 
+        )
+        target_link_libraries (
+            IrisCodecEncoderPython
+            PRIVATE IrisHeaders
+            PRIVATE ${IrisCodecEncoderDependencies}
+        )
+        install(
+            TARGETS IrisCodecEncoderPython
+            DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/Encoder
+        )
+    endif()
 endif()
