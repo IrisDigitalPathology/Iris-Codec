@@ -353,7 +353,7 @@ if(IRIS_BUILD_PYTHON)
         # Copy install the python source files
         install(
             DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris/Encoder
-            DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/Encoder
+            DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/
         )
         # Then build the Python module
         pybind11_add_module(
