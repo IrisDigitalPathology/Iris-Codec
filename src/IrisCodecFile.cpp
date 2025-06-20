@@ -28,7 +28,7 @@ size_t get_page_size() {
     GetSystemInfo(&sys_info);
     return sys_info.dwPageSize;
 };
-const size_t PAGE_SIZE = get_page_size();
+const size_t page_size = get_page_size();
 inline void GENERATE_TEMP_FILE (File& file, bool ulink) {
     auto& file_path = file->path;
     

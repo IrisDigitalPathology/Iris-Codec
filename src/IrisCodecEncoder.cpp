@@ -1098,7 +1098,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
             goto ENCODING_FAILED;
         }
         
-        auto rename = IrisCodec::rename_file(file, dst_file_path);
+        auto rename = IrisCodec::rename_file(file, dst_file_path.string());
         if (rename & IRIS_FAILURE) {
             _status.store(ENCODER_ERROR);
             MutexLock __ (_tracker.error_msg_mutex);
