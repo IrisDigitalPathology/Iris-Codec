@@ -58,9 +58,6 @@ Iris::Result validate_slide (const struct SlideOpenInfo &info) noexcept
         return validate_file_structure(file->ptr, file->size);
         
     } catch (std::runtime_error &e) {
-        #if IRIS_DEBUG
-        std::cerr   << log.str();
-        #endif
         return Iris::Result (
             IRIS_FAILURE, 
             "Iris File Extension slide (" + 

@@ -4,6 +4,7 @@
 //
 //  Created by Ryan Landvater on 1/10/24.
 //
+#include <string>
 #include <assert.h>
 #include <iostream>
 #include <filesystem>
@@ -44,11 +45,13 @@ inline void GENERATE_TEMP_FILE (File& file, bool ulink) {
     if (!name_len) throw std::system_error(errno, std::generic_category(),
         "GENERATE_TEMP_FILE failed to get unique cache file name");
 
-    file_path = std::string(TEMP_FILE_NAME, name_len);
+    file_path = std::string(TEMP_FILE_NAME, TEMP_FILE_NAME + name_len);
     
 
-    // Open stream access to the file
-    file->handle = fopen(file->path.c_str(),"rbR+");
+    // Replace the unsafe fopen with the safer fopen_s
+    if (fopen_s(&file->handle, file->path.c_str(), "rbR+") != 0) {
+        throw std::runtime_error("Failed to open file with fopen_s");
+    }
 
     // Unlink the file from the file system so that when the program
     // closes, the file will be immediately released.
@@ -250,7 +253,7 @@ inline void UNLOCK_FILE(File& file)
 #include <sys/mman.h>
 #include <sys/fcntl.h>
 #include <unistd.h>
-const size_t PAGE_SIZE = getpagesize();
+const size_t page_size = getpagesize();
 inline void GENERATE_TEMP_FILE (const File& file, bool ulink)
 {
     // Create the file path template (the 'X' values will be modified).Co
@@ -467,15 +470,16 @@ File    open_file (const struct FileOpenInfo &open_info)
     try {
         File file = std::make_shared<__INTERNAL__File>(open_info);
 
-
         // Open the file for reading or reading and writing depending on write access
         #if _WIN32
-        file->handle = fopen(file->path.data(), open_info.writeAccess ? "rbR+" : "rbR");
+        if (fopen_s(&file->handle, file->path.c_str(), open_info.writeAccess ? "rbR+" : "rbR") != 0) {
+            throw std::runtime_error("Failed to open file");
+        }
         #else
         file->handle = fopen(file->path.data(), open_info.writeAccess ? "rb+" : "rb");
+        if (!file->handle) throw std::runtime_error
+            ("Failed to open the file");
         #endif
-        if (!file->handle)
-            throw std::runtime_error("Failed to open the file");
 
         // Get the file size.
         GET_FILE_SIZE(file);
@@ -512,7 +516,7 @@ File create_cache_file (const struct CacheCreateInfo &create_info)
         GENERATE_TEMP_FILE(file, create_info.unlink);
         
         // Set the initial cache file to about 500 MB at the page break.
-        RESIZE_FILE(file, ((size_t)5E8&~(PAGE_SIZE-1))+PAGE_SIZE);
+        RESIZE_FILE(file, ((size_t)5E8&~(page_size-1))+page_size);
 
         // Map the file into memory
         PERFORM_FILE_MAPPING(file);
@@ -540,7 +544,7 @@ Result resize_file (const File &file, const struct FileResizeInfo &info)
     auto size = info.pageAlign ?
     // if page align, drop the size to the closest page break
     // and then add one page tobe at least the request size
-    (info.size & ~(PAGE_SIZE-1)) + PAGE_SIZE :
+    (info.size & ~(page_size-1)) + page_size :
     // Else, just do the info.size
     info.size;
     
@@ -610,9 +614,9 @@ __INTERNAL__File::~__INTERNAL__File ()
 {
     // If the file is mapped, unmap
     #if _WIN32
-    UNMAP_FILE(map, ptr);
+    UNMAP_FILE  (map, ptr);
     #else
-    UNMAP_FILE      (ptr, size);
+    UNMAP_FILE  (ptr, size);
     #endif
     
     // Close the file

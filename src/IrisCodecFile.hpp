@@ -30,7 +30,7 @@ public:
    ~__INTERNAL__File                ();
     std::string get_path            () const;
     BYTE*       get_ptr             () const;
-    void       rename_file         (const std::string& new_path);
+    void        rename_file         (const std::string& new_path);
 };
 }
 #endif /* IrisCodecFile_hpp */

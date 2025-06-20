@@ -704,11 +704,7 @@ inline Metadata READ_METADATA (const EncoderSource& source) {
         case EncoderSource::ENCODER_SRC_IRISSLIDE:
             return source.irisSlide->get_slide_info().metadata;
         case EncoderSource::ENCODER_SRC_OPENSLIDE:
-            #if IRIS_INCLUDE_OPENSLIDE
-            return READ_OPENSLIDE_METADATA (source);
-            #else
-            throw std::runtime_error("Openslide linkage was NOT compiled into this binary. Request a new version of Iris Codec with OpenSlide support if you would like to decode slide scanning vendor slide files only accessable to OpenSlide.");
-            #endif
+            return READ_OPENSLIDE_METADATA(source);
         case EncoderSource::ENCODER_SRC_APERIO:
             //TODO: APERIO READ METADATA
             throw std::runtime_error
@@ -762,7 +758,6 @@ inline Offset STORE_ASSOCIATED_IMAGES (const Context& ctx,
                     bytes   = source.irisSlide->get_assoc_image(label);
                     break;
                 case EncoderSource::ENCODER_SRC_OPENSLIDE:
-                    #if IRIS_INCLUDE_OPENSLIDE
                     info    = READ_OPENSLIDE_ASSOCIATED_IMAGE_INFO(source.openslide, label);
                     bytes   = ctx->compress_image(CompressImageInfo{
                         .pixelArray = READ_OPENSLIDE_ASSOCIATED_IMAGE(source.openslide, info),
@@ -773,9 +768,6 @@ inline Offset STORE_ASSOCIATED_IMAGES (const Context& ctx,
                         .quality    = QUALITY_DEFAULT
                     });
                     break;
-                    #else
-                    throw std::runtime_error("Openslide linkage was NOT compiled into this binary. Request a new version of Iris Codec with OpenSlide support if you would like to decode slide scanning vendor slide files only accessable to OpenSlide.");
-                    #endif
                 case EncoderSource::ENCODER_SRC_APERIO:
                     //TODO: APERIO READ METADATA
                     throw std::runtime_error("READ_METADATA failed as APERIO TIFF reads not yet built; Use openslide for the moment");
@@ -1106,7 +1098,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
             goto ENCODING_FAILED;
         }
         
-        auto rename = IrisCodec::rename_file(file, dst_file_path.string());
+        auto rename = IrisCodec::rename_file(file, dst_file_path);
         if (rename & IRIS_FAILURE) {
             _status.store(ENCODER_ERROR);
             MutexLock __ (_tracker.error_msg_mutex);
