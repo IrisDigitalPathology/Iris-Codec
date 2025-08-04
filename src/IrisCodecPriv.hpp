@@ -38,12 +38,15 @@
 #define IRIS_INCLUDE_OPENSLIDE 1
 #endif
 #include <iostream>
+#include <assert.h>
 #include "IrisCore.hpp"
 #include "IrisCodecCore.hpp"
 #include "IrisBuffer.hpp"
+#include "IrisQueue.hpp"
+#include "IrisAsync.hpp"
+#include "IrisCodecExtension.hpp"
 #include "IrisCodecPrivTypes.hpp"
 #include "IrisCodecFile.hpp"
-#include "IrisCodecExtension.hpp"
 #include "IrisCodecContext.hpp"
 #include "IrisCodecSlide.hpp"
 #include "IrisCodecCache.hpp"

@@ -83,13 +83,28 @@ using FileLock = std::shared_ptr<class __INTERNAL__FileLock>;
 
 // MARK: - ENCODER STRUCTURES
 enum __tileStatus {
+    TILE_FREE,
+    TILE_INITIALIZING,
+    TILE_READING,
     TILE_PENDING,
     TILE_ENCODING,
     TILE_COMPLETE,
 };
+using Subtile                   = uint16_t;
+using SubtileTracker            = std::atomic<Subtile>;
+#define SUBTILES_COMPLETE       UINT16_MAX
+//#define SUBTILES_COMPLETE       UINT16_MAX;
+static_assert(std::is_same<Subtile, uint16_t>::value,
+"If you change/expand subtile flag, remember to update the \
+SUBTILESCMPLT to the max value of the new type");
 struct TileTracker {
     std::atomic<__tileStatus>   status;
-    TileTracker() : status(TILE_PENDING) {}
+    SubtileTracker              subtile;
+    Iris::Buffer                pixels  = NULL;
+    Iris::Buffer                stream  = NULL;
+    TileTracker() :
+    status  (TILE_FREE),
+    subtile (0){}
 };
 struct EncoderSource {
     enum {
@@ -117,6 +132,45 @@ struct EncoderTracker {
     EncoderTracker  ():
     completed       (0),
     total           (0){}
+};
+
+//using DerivationQueue = std::unique_ptr<struct __INTERNAL__DerivationQueue>;
+//struct __INTERNAL__DerivationQueue {
+//    enum __status {
+//        QUEUE_ACTIVE            = 0,    // Waiting on tasks
+//        QUEUE_DRAINING          = 0x01, // Will exit upon no more tasks
+//        QUEUE_TERMINATE         = 0x11, // Will not accept new tasks; exit ASAP
+//    };
+//    using TaskList              = Iris::FIFO2::Queue<Iris::LambdaPtr>;
+//    using Status                = std::atomic<__status>;
+//    TaskList        tasks;
+//    Threads         threads;
+//    Mutex           task_added_mtx; // Used only for conditional variable
+//    Notification    task_added;     // Conditional variable notification
+//    Status          status;
+//    explicit __INTERNAL__DerivationQueue    (uint32_t thread_pool_size);
+//    __INTERNAL__DerivationQueue             (const __INTERNAL__DerivationQueue&) = delete;
+//    __INTERNAL__DerivationQueue& operator = (const __INTERNAL__DerivationQueue&) = delete;
+//   ~__INTERNAL__DerivationQueue             ();
+//    void issue_task                         (const LambdaPtr&);
+//    void wait_until_complete                ();
+//    void terminate_execution                ();
+//private:
+//    void process_tasks                      ();
+//};
+struct DerivationInfo {
+    using Queue                 = Async::ThreadPool;
+    using Strategy              = EncoderDerivation;
+    using Tracker               = EncoderTracker;
+    using Table                 = IrisCodec::Abstraction::TileTable;
+    using AtomicOffset          = atomic_uint64;
+    const Context&  context;
+    const Queue&    queue;
+    const Strategy& strategy;
+    const File&     file;
+    Tracker&        tracker;
+    Table&          table;
+    AtomicOffset&   offset;
 };
 } // END IRIS CODEC NAMESPACE
 #endif /* IrisCodecPrivTypes_h */

@@ -10,17 +10,19 @@
 namespace IrisCodec {
 struct EncoderTracker;
 using AtomicEncoderStatus           = std::atomic<EncoderStatus>;
+using DerivationQueue               = Iris::Async::ThreadPool;
 class __INTERNAL__Encoder {
     enum SourceType {
         ENCODER_SOURCE_UNDEFINED    = 0,
         ENCODER_SOURCE_FILE,
         ENCODER_SOURCE_CACHE
     }                               _srcType    = ENCODER_SOURCE_UNDEFINED;
+    bool                            _derive;
     const Context                   _context;
     std::string                     _srcPath;
     std::string                     _dstPath;
-    Cache                           _cache;
     Encoding                        _encoding;
+    EncoderDerivation               _derivation;
     Threads                         _threads;
     EncoderTracker                  _tracker;
     AtomicEncoderStatus             _status;
@@ -44,6 +46,8 @@ public:
     Result  reset_encoder           ();
     Result  dispatch_encoder        ();
     Result  interrupt_encoder       ();
+private:
+    void    encode_derived_tile     (uint32_t,uint32_t,uint32_t);
 };
 } // END IRIS CODEC NAMESPACE
 #endif /* IrisCodecEncoder_hpp */

@@ -47,7 +47,9 @@ function(get_codec_version)
 endfunction()
 
 get_codec_version()
+message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 message(STATUS "BUILDING IRIS CODEC COMMUNITY MODULE VERSION v" ${IRIS_CODEC_VERSION_STRING})
+message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 if (IRIS_BUILD_DEPENDENCIES)
     message(STATUS "Iris Codec is configured to build all dependencies and statically link into a single self-contained binary.")
 endif()
@@ -112,17 +114,18 @@ FetchContent_Declare (
     FETCHCONTENT_UPDATES_DISCONNECTED ON
     FETCHCONTENT_QUIET ON
 )
-message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 FetchContent_MakeAvailable(
     IrisHeaders
     IrisFileExtension
 )
-message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 # Threading
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads)
 
 # Include external projects
+include(./cmake/hwy.cmake)
 include(./cmake/turbo-jpeg.cmake)
 include(./cmake/avif.cmake)
 include(./cmake/png.cmake)
@@ -145,6 +148,7 @@ set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
 set(CODEC_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 set (
     IrisCodecSources
+    ${irisheaders_SOURCE_DIR}/src/IrisSIMD.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecContext.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecFile.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecCache.cpp
@@ -152,6 +156,8 @@ set (
 )
 set (
     IrisCodecEncoderSources
+    ${irisheaders_SOURCE_DIR}/src/IrisAsync.cpp
+    ${CODEC_SOURCE_DIR}/IrisCodecDeriveLayers.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp
 )
 set (
