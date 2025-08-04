@@ -201,6 +201,9 @@ target_link_libraries (
     IrisCodecLib
     PUBLIC IrisHeaders
 )
+if (hwy_EXTERNAL_PROJECT_ADD)
+    add_dependencies(IrisCodecLib hwy)
+endif()
 if (TURBOJPEG_EXTERNAL_PROJECT_ADD) 
     add_dependencies(IrisCodecLib TurboJpeg)
 endif()

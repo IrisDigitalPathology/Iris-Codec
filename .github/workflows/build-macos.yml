@@ -31,7 +31,7 @@ jobs:
         echo "install-dir=${{ github.workspace }}/${{ inputs.artifact }}" >> "$GITHUB_OUTPUT"
 
     - name: Fetch Dependencies
-      run: brew install jpeg-turbo libavif openslide libpng
+      run: brew install highway jpeg-turbo libavif openslide libpng
 
     - name: Configure CMake
       run: >

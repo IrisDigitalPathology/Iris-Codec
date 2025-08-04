@@ -4,7 +4,7 @@
 //
 //  Created by Ryan Landvater on 7/7/25.
 //
-
+#include <cmath>
 #include "IrisCodecPriv.hpp"
 #include "IrisSIMD.hpp"
 namespace IrisCodec {

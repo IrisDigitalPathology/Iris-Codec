@@ -1032,8 +1032,8 @@ Result __INTERNAL__Encoder::dispatch_encoder()
     
     // Format the output file path
     if (_dstPath.length() == 0)
-        _dstPath = source_dir.make_preferred();
-    else _dstPath = std::filesystem::path(_dstPath).make_preferred();
+        _dstPath = source_dir.make_preferred().string();
+    else _dstPath = std::filesystem::path(_dstPath).make_preferred().string();
     if (std::filesystem::is_directory(_dstPath) == false) throw std::runtime_error
         ("[ERROR] Invalid encoder destination directory path "+_dstPath);
     if (_dstPath.back() != std::filesystem::path::preferred_separator)

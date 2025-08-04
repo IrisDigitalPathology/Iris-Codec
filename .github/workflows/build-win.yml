@@ -49,7 +49,7 @@ jobs:
       run: >
         git clone --depth 1 https://github.com/microsoft/vcpkg.git ${{ github.workspace }}\vcpkg && 
         ${{ github.workspace }}\vcpkg\bootstrap-vcpkg.bat &&
-        ${{ github.workspace }}\vcpkg\vcpkg.exe install libjpeg-turbo libavif libpng --binarysource="clear;x-gha,readwrite"
+        ${{ github.workspace }}\vcpkg\vcpkg.exe install highway libjpeg-turbo libavif libpng --binarysource="clear;x-gha,readwrite"
 
     - name: Configure CMake
       run: >
