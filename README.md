@@ -1,8 +1,8 @@
 # Iris Codec Community Module
 
 Copyright &copy; 2025 Iris Developers; MIT Software License
-> [!WARNING]
->  The Iris Codec module is still in active development. We do not anticipate altering the established API functions in the [header files](https://github.com/IrisDigitalPathology/Iris-Headers) but as we add in new features, some elements of the API may change slightly. Please check in regularly if you intend to update your dynamically linked libraries to ensure no API breaking changes have been merged. 
+<!-- > [!WARNING]
+>  The Iris Codec module is still in active development. We do not anticipate introducting breaking API alterations within the [header files](https://github.com/IrisDigitalPathology/Iris-Headers) but as we add in new features, some elements of the API may change slightly. Please check in regularly if you intend to update your dynamically linked libraries to ensure no critial API changes have been merged.  -->
 
 
 The Iris Codec Community module is a part of the Iris Digital Pathology project. This module allows for:
@@ -14,10 +14,13 @@ This repository was designed to allow for extremely fast slide access using a si
 - Source files with [CMake build scripts](README.md#c-and-c-implementations).
 - Prebuilt python modules are avilable via [Python package managers](README.md#python).
 
-This module has reliatively limited dependencies. As our encoder builds shift away from using OpenSlide, we will add additional library dependencies for reading vendor files. 
+This module has relatively limited dependencies. As our encoder builds shift away from using OpenSlide, we will add additional library dependencies for reading vendor files. 
+
+> [!TIP]
+> **Iris Slide Files may immediately be used instead of deep zoom images (DZI)** within your image management and viewer stacks. This is because we provide [Iris RESTful Server](https://github.com/IrisDigitalPathology/Iris-RESTful-Server) builds and [OpenSeaDragon IrisTileSource]() that may be deployed using docker containers from our pre-build images as well as pre-built binaries (for those who do not wish to use containers). We also provide the [examples.restful.irisdigitalpathology.org](https://examples.restful.irisdigitalpathology.org) subdomain as a developer service to the community. **This domain responds directly to Iris RESTful API calls.** Use it to integrate and evaluate your HTTPS implementations with the Iris RESTful API, utilizing example Iris test slide files and accelerating your development process.
 
 > [!NOTE]
-> **If you are a scanning device manufacturer or programmer developing a custom encoder/decoder, the [Iris File Extension (IFE) repository](https://github.com/IrisDigitalPathology/Iris-File-Extension) will provide the necessary calls to read, write, and validate slide files in accordance with the Iris File Extension Specification.** The current repository (Iris Codec Module) applies higher level abstractions for slide access and incorporates image codecs for image compression. The IFE repository does not. It is limited to (de)serialization and validation. The Iris Codec Module incorporates the [IFE repository](https://github.com/IrisDigitalPathology/Iris-File-Extension) as a dependency, so if you use the IFE respository instead, the Iris Codec module source files may be a helpful guide in how we choose to read and write to Iris files using the IFE's API.
+> **If you are a scanning device manufacturer or programmer developing a custom encoder/decoder, the [Iris File Extension (IFE) repository](https://github.com/IrisDigitalPathology/Iris-File-Extension) will provide the necessary calls to read, write, and validate slide files in accordance with the Iris File Extension Specification.** We are adding **'stream encoding'** support for scanners within this repository. However, if you wish to write your own encoder using the IFE respository instead, the Iris Codec module source files may be a helpful guide in how we choose to read and write to Iris files using the IFE's API.
 
 *If you are a software engineer looking to help with Iris, we are always looking for additional passionate engineers to help in developing the Iris Project.*
 
@@ -34,8 +37,6 @@ The standard module (decoder) requires:
 
 The Encoder (optional) additionally requires:
 - [OpenSlide](https://github.com/openslide/openslide) <p> *We hope to shift away from openslide in future releases*
-
-
 
 ## Building From Source
 
