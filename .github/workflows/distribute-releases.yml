@@ -95,9 +95,12 @@ jobs:
         -D IRIS_BUILD_STATIC=ON
         -D IRIS_BUILD_PYTHON=OFF
 
+  build_wasm:
+    uses: ./.github/workflows/build-wasm.yml
+
   upload_artifacts:
     runs-on: ubuntu-latest
-    needs: [build_linux, build_macos, build_windows]
+    needs: [build_linux, build_macos, build_windows, build_wasm]
     steps:
       - uses: actions/checkout@v4
       - name: Retrieve Build Artifacts

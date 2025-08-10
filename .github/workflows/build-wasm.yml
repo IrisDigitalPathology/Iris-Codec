@@ -13,17 +13,19 @@ jobs:
 
       - name: Setup Emscripten SDK
         run: |
-          git clone https://github.com/emscripten-core/emsdk.git ${{ github.workspace }}
-          cd emsdk
-          ${{ github.workspace }}/emsdk install latest
-          ${{ github.workspace }}/emsdk activate latest
+          git clone https://github.com/emscripten-core/emsdk.git \
+            ${{ github.workspace }}/emsdk
+          cd ${{ github.workspace }}/emsdk
+          git pull
+          ./emsdk  install latest
+          ./emsdk activate latest
         shell: bash
 
       - name: Configure & Build
         working-directory: javascript
         run: |
           source ${{ github.workspace }}/emsdk/emsdk_env.sh
-          emcmake -B build -DCMAKE_INSTALL_PREFIX=install .
+          emcmake cmake -B build -DCMAKE_INSTALL_PREFIX=install .
           cmake --build build --config Release -j$CPU_COUNT
           cmake --install build
         shell: bash
@@ -31,10 +33,10 @@ jobs:
       - name: Package Artifact
         working-directory: javascript
         run: |
-          tar -czf iris-codec.tar.gz -C install .
+          tar -czf iris-codec-javascript.tar.gz -C install .
 
       - name: Upload WASM Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: iris-codec-javascript
-          path: javascript/iris-codec.tar.gz
+          name: javascript
+          path: javascript/iris-codec-javascript.tar.gz
