@@ -1,0 +1,17 @@
+name: Iris Codec WASM CI
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*/README.md'
+  pull_request:
+    branches: 
+      - main
+    paths-ignore:
+      - '*/README.md'
+
+jobs:
+  wasm-build:
+    uses: ./.github/workflows/build-wasm.yml

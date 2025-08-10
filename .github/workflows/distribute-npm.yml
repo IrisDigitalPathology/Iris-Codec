@@ -1,0 +1,44 @@
+name: Publish to npm
+
+on:
+  workflow_run:
+    workflows: [ Build WASM ]
+    types: [ completed ]
+
+jobs:
+  publish:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'release'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: iris-codec-javascript
+          path: ${{ github.workspace }}
+
+      - name: Copy WASM artifacts and README into package folder
+        run: |
+          tar -xf iris-codec.tar.gz -C javascript/
+          cp README.md javascript/
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm dependencies
+        working-directory: javascript
+        run: npm install
+
+      - name: Publish to npm
+        working-directory: javascript
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

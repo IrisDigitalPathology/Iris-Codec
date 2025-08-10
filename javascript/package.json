@@ -1,0 +1,30 @@
+{
+  "name": "iris-codec",
+  "version": "2025.2.2",
+  "description": "The Iris Codec Community module is a part of the Iris Digital Pathology project. This module allows for the remote reading of Iris whole slide image (WSI) digital slide files (.iris) using HTTP ranged reads",
+  "main": "build/iris-codec.js",
+  "module": "build/iris-codec.js",
+  "types": "build/iris-codec.d.ts",
+  "files": [
+    "build/iris-codec.js",
+    "build/iris-codec.wasm",
+    "build/iris-codec.d.ts"
+  ],
+  "scripts": {
+    "build": "emcmake cmake -B build . && cmake --build build -j$CPU_COUNT"
+  },
+  "keywords": [
+    "iris",
+    "iris-codec",
+    "pathology",
+    "digital pathology",
+    "whole slide image"
+  ],
+  "author": "Ryan Landvater",
+  "license": "MIT",
+  "readme": "../README.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IrisDigitalPathology/Iris-Codec.git"
+  }
+}
