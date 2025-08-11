@@ -5,6 +5,9 @@
   "main": "iris-codec.js",
   "module": "iris-codec.js",
   "types": "iris-codec.d.ts",
+  "dependencies": {
+    "xhr2": "^0.2.0"
+  },
   "files": [
     "iris-codec.js",
     "iris-codec.wasm",

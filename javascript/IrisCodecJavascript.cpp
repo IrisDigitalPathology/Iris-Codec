@@ -212,8 +212,9 @@ public:
             js_array.call<void>("push", uint8_array_view);
             
             // Create the Blob object with type 'image/jpeg'
-            val blob = val::global("Blob").new_(js_array);
-            blob.set("type", SERIALIZE_ENCODING(_abstraction.tileTable.encoding));
+            val options = val::object();
+            options.set("type", SERIALIZE_ENCODING(_abstraction.tileTable.encoding));
+            val blob = val::global("Blob").new_(js_array, options);
             
             // Pass the Blob object to the JavaScript onDone callback
             onDone(blob);

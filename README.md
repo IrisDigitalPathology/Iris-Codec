@@ -13,22 +13,27 @@ This repository was designed to allow for extremely fast slide access using a si
 - Pre-compiled binaries in the [releases tab](https://github.com/IrisDigitalPathology/Iris-Codec/releases),
 - Source files with [CMake build scripts](README.md#c-and-c-implementations).
 - Prebuilt python modules are avilable via [Python package managers](README.md#python).
+- JavaScript WASM module via [jsDelivr](https://cdn.jsdelivr.net/npm/iris-codec@latest/)
 
 This module has relatively limited dependencies. As our encoder builds shift away from using OpenSlide, we will add additional library dependencies for reading vendor files. 
 
 > [!TIP]
-> **Iris Slide Files may immediately be used instead of deep zoom images (DZI)** within your image management and viewer stacks. This is because we provide [Iris RESTful Server](https://github.com/IrisDigitalPathology/Iris-RESTful-Server) builds and [OpenSeaDragon IrisTileSource]() that may be deployed using docker containers from our pre-build images as well as pre-built binaries (for those who do not wish to use containers). We also provide the [examples.restful.irisdigitalpathology.org](https://examples.restful.irisdigitalpathology.org) subdomain as a developer service to the community. **This domain responds directly to Iris RESTful API calls.** Use it to integrate and evaluate your HTTPS implementations with the Iris RESTful API, utilizing example Iris test slide files and accelerating your development process.
+> **Iris Slide Files may immediately be used instead of deep zoom images (DZI)** within your image management and viewer stacks. This is because we provide [Iris RESTful Server](https://github.com/IrisDigitalPathology/Iris-RESTful-Server) builds and [OpenSeaDragon IrisTileSource](https://github.com/openseadragon/openseadragon/blob/master/src/iristilesource.js) that may be deployed using docker containers from our pre-build images as well as pre-built binaries (for those who do not wish to use containers). We also provide the [examples.restful.irisdigitalpathology.org](https://examples.restful.irisdigitalpathology.org) subdomain as a developer service to the community. **This domain responds directly to Iris RESTful API calls.** Use it to integrate and evaluate your HTTPS implementations with the Iris RESTful API, utilizing example Iris test slide files and accelerating your development process. See [JavaScript](#javascript) for more information on using Iris Files with web viewers.
 
 > [!NOTE]
 > **If you are a scanning device manufacturer or programmer developing a custom encoder/decoder, the [Iris File Extension (IFE) repository](https://github.com/IrisDigitalPathology/Iris-File-Extension) will provide the necessary calls to read, write, and validate slide files in accordance with the Iris File Extension Specification.** We are adding **'stream encoding'** support for scanners within this repository. However, if you wish to write your own encoder using the IFE respository instead, the Iris Codec module source files may be a helpful guide in how we choose to read and write to Iris files using the IFE's API.
 
 *If you are a software engineer looking to help with Iris, we are always looking for additional passionate engineers to help in developing the Iris Project.*
 
+# Example Slides
+The following example WSI files are publically available from AWS S3:
+* [cervix_2x_jpeg.iris (jpeg encoded at 2x downsampling)](https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_2x_jpeg.iris)
+* [cervix_4x_jpeg.iris (jpeg encoded at 4x downsampling)](https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris)
 # Installation
 The Iris Codec Community module is available via:
 - [Building From Source](README.md#building-from-source)
 - [Python Package Managers](README.md#python)
-- [JavaScript WASM Module](README.md#javascript)
+- [JavaScript NPM / JSDelivr](README.md#javascript)
 
 The standard module (decoder) requires:
 - C++ 20 Standard Library
@@ -42,9 +47,9 @@ The Encoder (optional) additionally requires:
 
 This library can be built from source using CMake. 
 
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-macos-CI.yml?style=for-the-badge&logo=github&label=MacOS%20CMake%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)\
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-macos-CI.yml?style=for-the-badge&logo=github&label=MacOS%20CMake%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)
 [![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-linux-CI.yml?style=for-the-badge&logo=github&label=Ubuntu%20CMake%20CI)
-](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)\
+](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)
 [![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-win64-CI.yml?style=for-the-badge&logo=github&label=Windows%20CMake%20CI)
 ](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
 
@@ -120,12 +125,8 @@ or install it with `mamba`:
 mamba install iris-codec
 ```
 
->[!NOTE]
-> The python Conda Forge Encoder does not support OpenSlide on Windows presently as OpenSlide does not support windows with its official Conda-Forge package. We are building in native support for vendor files and DICOM for re-encoding. 
-
 ### Pip (PyPi)
 [![PyPI - Version](https://img.shields.io/pypi/v/Iris-Codec?color=blue&style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Status](https://img.shields.io/pypi/status/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/Iris-Codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 [![PyPI - Format](https://img.shields.io/pypi/format/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
 [![PyPI - Downloads](https://img.shields.io/pepy/dt/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
@@ -137,14 +138,52 @@ pip install iris-codec openslide-bin
 ```
 
 ## Javascript
-[![Iris Codec Emscripten Webassembly Build](https://github.com/IrisDigitalPathology/Iris-Codec-JavaScript/actions/workflows/emcmake.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec-JavaScript/actions/workflows/emcmake.yml)
+[![Iris Codec WASM CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/emcmake-wasm-CI.yml?style=for-the-badge&logo=github&label=Iris%20Codec%20WebAssembly%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)
+[![NPM Version](https://img.shields.io/npm/v/iris-codec?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/iris-codec)
+[![jsDelivr hits (npm)](https://img.shields.io/jsdelivr/npm/hw/iris-codec?style=for-the-badge&logo=jsDelivr&link=https%3A%2F%2Fcdn.jsdelivr.net%2Fnpm%2Firis-codec%2F)](https://cdn.jsdelivr.net/npm/iris-codec@latest/)
 
-The [Iris-Codec-JavaScript repository](https://github.com/IrisDigitalPathology/Iris-Codec-JavaScript) contains the WebAssembly (WASM) build of the Iris Codec library, allowing it to be used in web browsers and Node.js applications. This implementation does not have the same dependencies, as image decoding is performed in the browser with JavaScript native codec tools. 
+There are two mechanisms by which Iris Codec / Iris slide files can be incorporated into a JavaScript project. Unlike the other builds in this repository, JavaScript implementations rely upon the browser enviornment to perform image decompression. 
+
+The two options are as follows:
+1. <strong>[Iris RESTful Server]()</strong>: This is the most efficient method of streaming image data to a client. This is a <u>**server side serialization**</u> tool. It will map Iris Slides into virtual memory and return image data quickly. This is only compatible with HTTP servers that have a true file system. This solution is very easy to implement using the [OpenSeaDragon IrisTileSource](https://github.com/openseadragon/openseadragon/blob/master/src/iristilesource.js) in about 4 lines of code (see below).
+2. <strong>[Iris-Codec WebAssembly Module](https://www.npmjs.com/package/iris-codec)</strong>: This is a slower method of streaming image data; however it is fully compatible with bucked-based storage solutions such as AWS S3 or Google Cloud Storage. It is slower because it is a <u>**client side serialization**</u> tool that validates and loads the full slide metadata in a series of small HTTP 206 'partial read' responses (including offset tables) upfront; following validation and offset generation however, reads are fast as they use HTTP ranged reads for tile data, hitting the same bucket file over and over again. Because of this limitation, we **STRONGLY** recommend <u>abstracting the metadata for all slides within a case set simultaneously</u> as it requires a small footprint (1-2 MB/slide) and allows for fast access following this file metadata abstraction. 
+
+>[!NOTE] [Iris RESTful]() has <u>substantially better performance</u>. The Iris-Codec WebAssembly module is primary useful when image data is stored in low-cost bucket storage where a custom server instance (Irist RESTful) cannot be deployed - AWS S3, for example. If you choose to use this route, we **STRONGLY** recommend <u>loading all slides within a case set simultaneously</u> as the major overhead with this module comes from slide validation and offset table generation. This can even take seconds, but all slides can be loaded simultaneously (ie all slides in a case can should be loaded at once), and only consumes 1-2 MB per slide.
+
+### Installation of Iris RESTful Server
+Please refer to the <strong>[Iris RESTful Server documentation](https://github.com/IrisDigitalPathology/Iris-RESTful-Server?tab=readme-ov-file#deployment-introduction)</strong> for a description of deploying the Iris RESTful Server. The easiest way is through deployment of our [official container images](https://ghcr.io/irisdigitalpathology/iris-restful:latest).
+
+### Installation of Iris-Codec WebAssembly
+When used in a client side system, jsDelivr will distribute the WebAssembly module from NPM. There is no installation needed from you.
+```html
+<!DOCTYPE html>
+<script type="module">
+    import createModule 
+    from 'https://cdn.jsdelivr.net/npm/iris-codec@latest';
+    
+    // Compile the WASM module and stall execution until ready
+    const irisCodec = await createModule();
+    console.log("Iris-Codec has been loaded");
+    
+    // ...Your code goes here...
+</script>
+```
+
+The general use case is in web applications. If you wish to use it with NodeJS to access remote slides or for node based testing it can be installed from NPM. Please do not try to build a server with this. It is designed for client-side applications and will bottleneck your server.
+
+```sh
+npm i iris-codec
+```
+
+>[!WARNING] Do not use this package from NPM for a server deployment that serves Iris encoded slides. This is a client slide tool and <u>the webassembly module was not designed for use in a server</u> and it will not work well for this purpose. Trust me. If you need a server, <strong>use Iris RESTful server instead</strong>; frankly, it is significantly faster and more robust than what Node will give you for slide tile serving.
+
+
 
 # Implementations
 We provide introduction implementation examples for the following languages below:
 - [C++ Example API](README.md#c-example-api)
 - [Python Example API](README.md#python-example-api)
+- [JavaScript Example API](README.md#javascript-webassembly-api)
 
 Please refer to the Iris Codec API documentation for a more through explaination.
 
@@ -324,3 +363,161 @@ if ('thumbnail' in info.metadata.associated_images):
     image = Image.fromarray(slide.read_associated_image('thumbnail'))
     image.show()
 ```
+
+## JavaScript Iris Codec API
+### Iris RESTful API
+Iris RESTful has a simple API (and supports DICOMweb WADO-RS), outlined here, and explained in greater detail within the [Iris RESTful API Exlained Section](https://github.com/IrisDigitalPathology/Iris-RESTful-Server/blob/main/README.md#api-explained). This will return the slide metadata in JSON format and slide tile image data.
+
+```
+Iris RESTful
+GET <URL>/slides/<slide-name>/metadata
+GET <URL>/slides/<slide-name>/layers/<layer>/tiles/<tile>
+
+Supported WADO-RS
+GET <URL>/studies/<study>/series/<UID>/metadata
+GET <URL>/studies/<study>/series/<UID>/instances/<layer>/metadata
+GET <URL>/studies/<study>/series/<UID>/instances/<layer>/frames/<tile>
+```
+
+
+### Iris JavaScript WASM API
+Load the Iris-Codec NPM WebAssembly module via jsDelivr (or download the [latest javascript release](https://github.com/IrisDigitalPathology/Iris-Codec/releases/latest) and include your local copy)
+```html
+<!DOCTYPE html>
+<script type="module">
+    import createModule 
+    from 'https://cdn.jsdelivr.net/npm/iris-codec@latest';
+    
+    // Compile the WASM module and stall execution until ready
+    const irisCodec = await createModule();
+    console.log("Iris-Codec has been loaded");
+    
+    // ...Your code goes here...
+</script>
+```
+
+Once loaded, you can access image data in a manner similar to the C++ and Python Iris-Codec API. Importantly, the metadata will be returned in IrisCodec::Abstraction C++ types (file metadata abstractions) exposed using Emscripten bindings. Refer to the included TypeScript file for those definitions. Image tile data will be returned as an image (MIME) source and can be used directly as an image data source.
+
+We support callback notation presently as it is both common/well established with JS programmers and easy to construct promises from a callback; however it is more challening to reformat a promise into a callback structure for legacy support. We may simply move to promises in the future. If you wish to wrap file access in promise structures, here are example definitions:
+```js
+// Wraps Module.validateFileStructure (url, callback) in a Promise
+function validateFileStructureAsync(Module, fileUrl) {
+  return new Promise((resolve, reject) => {
+    Module.validateFileStructure(fileUrl, (result) => {
+        const SUCCESS = Module.ResultFlag.IRIS_SUCCESS.value;
+        if (result.flag.value === SUCCESS) {
+            resolve();
+        } else {
+            // result.message is guaranteed to be a JS string
+            reject(new Error(result.message));
+        }
+    });
+  });
+}
+// Wraps Module.openIrisSlide(url, callback) in a Promise
+function openIrisSlideAsync(url) {
+  return new Promise((resolve, reject) => {
+    Module.openIrisSlide(url, slide => {
+      if (!slide) {
+        reject(new Error("Failed to validate"));
+      } else {
+        resolve(slide);
+      }
+    });
+  });
+}
+// Wraps slide.getSlideTile(layer, tileIndex, callback) in a Promise
+function getSlideTileAsync(slide, layer, tileIndex) {
+  return new Promise((resolve, reject) => {
+    slide.getSlideTile(layer, tileIndex, tile_image => {
+      if (tile_image) {
+        resolve(tile_image);
+      } else {
+        reject(new Error("Failed to get tile"));
+      }
+    });
+  });
+}
+```
+
+Perform a deep validation of the slide file structure. This will navigate the internal offset-chain and check for violations of the IFE standard. This can be omitted if you are confident of the source.
+
+```js
+const irisCodec = await createModule();
+console.log("Iris-Codec has been loaded");
+const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_2x_jpeg.iris";
+try {
+    await validateFileStructureAsync(irisCodec, url);
+    console.log(`Slide file at ${url} successfully passed validation`);
+} catch (error) {
+    console.log(`Slide file at ${url} failed validation: ${error}`);
+}
+```
+Open a slide file. The following conditional will succeed without throwing an exception if the slide has already passed validation but you may skip validation to reduce server requests.
+```js
+const irisCodec = await createModule();
+console.log("Iris-Codec has been loaded");
+const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_2x_jpeg.iris";
+try {
+    const slide = await openIrisSlideAsync(irisCodec, url);
+
+    // ...Do something with slide
+
+    slide.delete();
+} catch (error) {
+    console.error(error);
+}
+```
+Get the slide abstraction, read off the slide dimensions, and then print it to the console.
+```js
+const irisCodec = await createModule();
+const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris";
+try {
+    const slide = await openIrisSlideAsync (irisCodec, url);
+
+    // Let's get the slide dimensions and print them to the console.
+    const info = slide.getSlideInfo();
+    const extent = info.extent;
+    console.log(`Slide file ${extent.width} px by ${extent.height}px at lowest resolution layer. The layer extents are as follows:`);
+    console.log(`There are ${extent.layers.size()} layers comprising the following dimensions:`)
+    for (var i = 0; i < extent.layers.size(); i++) {
+        const layer = extent.layers.get(i);
+        console.log(`  Layer ${i}: ${layer.xTiles} x-tiles, ${layer.xTiles} y-tiles, ${layer.scale}x scale`);
+    }
+    slide.delete();
+} catch (error) {
+    console.error(error);
+}
+```
+Generate a quick view of the one of the images (`tileImage`) somewhere earlier in the HTML page.
+```html
+<img id="tileImage" width="128" height="128" alt="Loading..." style="border: 1px solid black;"/>
+<!-- ... Somewhere Earlier -->
+<script type="module">
+    // Earlier Promise definitions 
+    try {
+        const slide = await openIrisSlideAsync (irisCodec, url);
+        const layer = 0;
+        const tile = 0;
+        const tileData = await getSlideTileAsync(slide, layer, tile);
+
+        // Now pass the image off to the 'tileImage' element.
+        const url = URL.createObjectURL(tileData);
+        const imgElement = document.getElementById("tileImage");
+        imgElement.src = url;
+
+        // Clean up after the image is loaded
+        imgElement.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            slide.delete();
+        };
+    } catch (error) {
+        console.error(error);
+    }
+    
+</script>
+```
+<!-- result, info = slide.get_info()
+if (result.success() == False):
+    raise Exception(f'Failed to read slide information: {result.message()}') -->
+

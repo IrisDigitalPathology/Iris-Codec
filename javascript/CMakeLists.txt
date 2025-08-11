@@ -105,6 +105,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         iris-codec PRIVATE
         -sFETCH
         -sASYNCIFY
+        -sEXPORT_ES6=1
+        -sMODULARIZE=1
         --emit-tsd iris-codec.d.ts
         --bind
         -O0
@@ -119,6 +121,8 @@ else ()
         iris-codec PRIVATE
         -sFETCH
         -sASYNCIFY
+        -sEXPORT_ES6=1
+        -sMODULARIZE=1
         --emit-tsd iris-codec.d.ts
         --bind
         -O3
