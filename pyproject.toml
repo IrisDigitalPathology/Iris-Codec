@@ -6,7 +6,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "Iris-Codec" 
-version = "2025.2.0a4" 
+version = "0.0.0" 
 
 description = "Portable and blazingly fast whole slide image compression and serialization library for the Iris File Extension"
 readme = "./python/README.md"
@@ -25,7 +25,7 @@ classifiers = [
   #   3 - Alpha
   #   4 - Beta
   #   5 - Production/Stable
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
 
   "Intended Audience :: Developers",
   "Topic :: Software Development :: Build Tools",
@@ -59,9 +59,9 @@ cmake.args = [
 ]
 cmake.build-type = "Release"
 cmake.source-dir = "."
+sdist.include = ["LICENSE", "licenses/*"]
+wheel.license-files = ["LICENSE", "licenses/*"]
 
 [tool.cibuildwheel]
 build-frontend = "build[uv]"
-# If there are data files included in your packages that need to be
-# installed, specify them here.
-# package-data = { "sample" = ["*.dat"] }
+

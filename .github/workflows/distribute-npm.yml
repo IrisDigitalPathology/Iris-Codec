@@ -5,7 +5,8 @@ on:
     types: [published]
 
 permissions:
-  contents: write
+  id-token: write 
+  contents: read
 
 jobs:
   build_wasm:
@@ -27,20 +28,22 @@ jobs:
       - name: Copy WASM artifacts and README into package folder
         run: |
           tar -xf iris-codec-javascript.tar.gz -C ${{ github.workspace }}/javascript/
-          cp ${{ github.workspace }}/README.md ${{ github.workspace }}/javascript/
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
-          registry-url: https://registry.npmjs.org
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          
+      - name: Set package version from GitHub tag
+        working-directory: javascript
+        run: |
+          VERSION=${{ github.event.release.tag_name }}
+          VERSION=${VERSION#v}
+          npm version $VERSION --no-git-tag-version
 
       - name: Install npm dependencies
         working-directory: javascript
-        run: npm install
-
-      - name: Publish to npm
-        working-directory: javascript
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm ci
+          npm publish --access public

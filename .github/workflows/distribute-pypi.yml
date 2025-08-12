@@ -105,6 +105,14 @@ jobs:
             path: ${{ github.workspace }}/dist
             merge-multiple: true
 
+        - name: Set version from GitHub tag
+          working-directory: ${{ github.workspace }}
+          run: |
+            TAG=${{ github.event.release.tag_name }}
+            VERSION=${TAG#v}  # Strip leading 'v'
+            sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+
+
         - name: Publish to PyPi 
           uses: pypa/gh-action-pypi-publish@release/v1
           with:

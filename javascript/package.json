@@ -1,6 +1,6 @@
 {
   "name": "iris-codec",
-  "version": "2025.2.3",
+  "version": "0.0.0",
   "description": "The Iris Codec Community module is a part of the Iris Digital Pathology project. This module allows for the remote reading of Iris whole slide image (WSI) digital slide files (.iris) using HTTP ranged reads",
   "main": "iris-codec.js",
   "module": "iris-codec.js",

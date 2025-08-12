@@ -41,7 +41,7 @@ if (NOT hwy_LIBRARY OR NOT hwy_INCLUDE)
         FETCHCONTENT_QUIET ON
         BUILD_BYPRODUCTS ${hwy_LIBRARY} # Ninja compatability
         CMAKE_ARGS 
-            -D CMAKE_INSTALL_PREFIX:PATH=""
+            -D CMAKE_INSTALL_PREFIX:PATH=${hwy_INSTALL_DIR}
             -D BUILD_SHARED_LIBS=OFF 
             -D BUILD_TESTING=OFF
             -D HWY_ENABLE_EXAMPLES=OFF

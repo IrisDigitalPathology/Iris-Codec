@@ -174,7 +174,7 @@ The general use case is in web applications. If you wish to use it with NodeJS t
 npm i iris-codec
 ```
 
-> [!WARNING] 
+> [!CAUTION] 
 > Do not use this package from NPM for a server deployment that serves Iris encoded slides. This is a client slide tool and <u>the webassembly module was not designed for use in a server</u> and it will not work well for this purpose. Trust me. If you need a server, <strong>use Iris RESTful server instead</strong>; frankly, it is significantly faster and more robust than what Node will give you for slide tile serving.
 
 
