@@ -8,6 +8,7 @@
 #include <filesystem>
 #include "IrisCodecPriv.hpp"
 
+
 namespace IrisCodec {
 inline void CHECK_ENCODER (const Encoder& encoder) {
     if (!encoder)               throw std::runtime_error ("No valid encoder provided");
@@ -167,6 +168,7 @@ Result set_encoder_dst_path(const Encoder &encoder, const std::string &dst_path)
     }
 }
 __INTERNAL__Encoder::__INTERNAL__Encoder    (const EncodeSlideInfo& __i) :
+_concurrency                                (__i.concurrency),
 _derive                                     (__i.derviation),
 _context                                    (__i.context),
 _srcPath                                    (__i.srcFilePath),
@@ -360,10 +362,11 @@ inline OpenSlideProperties PARSE_OPENSLIDE_PROPERTY (const char* const key_chars
     if (strcmp(key_chars, OPENSLIDE_PROPERTY_NAME_OBJECTIVE_POWER) == 0) return OBJECTIVE_POWER;
     return UNUSED;
 }
-inline Metadata READ_OPENSLIDE_METADATA (const EncoderSource src) {
+inline Metadata READ_OPENSLIDE_METADATA (const EncoderSource src, const Extent& extent) {
     openslide_t* os = src.openslide;
     Metadata metadata;
     
+    metadata.codec = get_codec_version();
     // Insert the attributes
     metadata.attributes.type = METADATA_FREE_TEXT;
     const char* const* attributes = openslide_get_property_names(os);
@@ -384,8 +387,7 @@ inline Metadata READ_OPENSLIDE_METADATA (const EncoderSource src) {
             case MPP: {
                 metadata.micronsPerPixel = round(atof
                 (openslide_get_property_value(os, attributes[index])) *
-                openslide_get_level_downsample
-                (os,openslide_get_level_count(os)-1) * 1000.f)/1000.f;
+                 extent.layers.front().downsample * 1000.f)/1000.f;
                 // You will note it's rounded to the 1000ths
                 continue;
             }
@@ -396,8 +398,7 @@ inline Metadata READ_OPENSLIDE_METADATA (const EncoderSource src) {
             case OBJECTIVE_POWER:
                 metadata.magnification = round(atof
                 (openslide_get_property_value(os, attributes[index])) /
-                openslide_get_level_downsample
-                (os,openslide_get_level_count(os)-1) * 1000.f)/1000.f;
+                 extent.layers.front().downsample * 1000.f)/1000.f;
                 // You will note it's rounded to the 1000ths
                 continue;
         }
@@ -448,13 +449,84 @@ inline Buffer READ_OPENSLIDE_ASSOCIATED_IMAGE (openslide_t* os, const Associated
     return dst;
 }
 #endif
+// MARK: - DICOM SPECIFIC METHODS
+using DcmFile = std::shared_ptr<struct __INTERNAL__DcmFile>;
+DcmFile  open_dicom_file             (const std::filesystem::path&);
+uint32_t get_dicom_number_of_levels  (DcmFile dicom);
+uint32_t get_dicom_number_of_frames  (DcmFile dicom, unsigned level);
+uint32_t get_dicom_layer_tile_width  (DcmFile dicom, unsigned level);
+uint32_t get_dicom_layer_tile_height (DcmFile dicom, unsigned level);
+uint32_t get_dicom_layer_width       (DcmFile dicom, unsigned level);
+uint32_t get_dicom_layer_height      (DcmFile dicom, unsigned level);
+Encoding get_dicom_encoding          (DcmFile dicom);
+Buffer   get_dicom_frame_buffer      (DcmFile dicom, unsigned levelIndex, unsigned frame);
+Metadata get_dicom_metadata          (DcmFile dicom, bool anonymize);
+inline Extent READ_EXTENT_DICOM (DcmFile dicom_file)
+{
+    Extent          extent;
+
+    // Get the total dimensions of the image
+    auto n_levels   = get_dicom_number_of_levels (dicom_file);
+    extent.width    = get_dicom_layer_width(dicom_file, 0);
+    extent.height   = get_dicom_layer_height(dicom_file, 0);
+    extent.layers   = LayerExtents(n_levels);
+    auto extent_IT  = extent.layers.begin();
+    auto f_level    = U32_CAST(0);
+    auto r_level    = U32_CAST(extent.layers.size() - 1);
+    for (; extent_IT  != extent.layers.end();
+         f_level++, r_level--, extent_IT++) {
+        auto& __e   = *extent_IT;
+        auto width  = get_dicom_layer_width(dicom_file, f_level);
+        auto height = get_dicom_layer_height(dicom_file, f_level);
+        __e.xTiles  = (width/TILE_PIX_LENGTH) + (width%TILE_PIX_LENGTH?1:0);
+        __e.yTiles  = (height/TILE_PIX_LENGTH) + (height%TILE_PIX_LENGTH?1:0);
+        __e.scale   =  width > height ?
+        round(F32_CAST(width)/F32_CAST(extent.width)*100.f)/100.f :
+        round(F32_CAST(height)/F32_CAST(extent.height)*100.f)/100.f;
+        assert(__e.xTiles*__e.yTiles == get_dicom_number_of_frames(dicom_file, f_level));
+    }
+    for (extent_IT = extent.layers.begin(); extent_IT != extent.layers.end(); extent_IT++)
+        extent_IT->downsample = extent.layers.back().scale / extent_IT->scale;
+    
+    return extent;
+}
+inline Buffer GET_DICOM_TILE (const EncoderSource src, LayerIndex __LI, TileIndex __TI)
+{
+    const auto dicom = src.dicomFile;
+    if (dicom == NULL)                      return NULL;
+    const auto extent = src.extent;
+    if (__LI >= extent.layers.size())       return NULL;
+    auto& __LE   = extent.layers[__LI];
+    if (__TI >= __LE.xTiles * __LE.yTiles)  return NULL;
+    
+    return get_dicom_frame_buffer(dicom, __LI, __TI+1);
+}
+inline Metadata READ_DICOM_METADATA (const EncoderSource src, const Extent& extent) {
+    auto dicom = src.dicomFile;
+    
+    // Read the raw metadata from the DICOM image
+    Metadata metadata = get_dicom_metadata (dicom, false);
+    
+    // Inject the current codec version
+    // NOTE: This is NOT the Iris File Extension version.
+    // That's written in under the hood.
+    metadata.codec = get_codec_version();
+    
+    // Normalize the magnification and Microns per pixel
+    // Relative to the first layer. This is more considerate for viewers
+    metadata.magnification /= extent.layers.front().downsample;
+    metadata.micronsPerPixel /= extent.layers.front().downsample;
+    
+    return metadata;
+}
 // MARK: - APERIO SPECIFIC METHODS
 
 // MARK: - FILE ENCODING METHODS
-inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NULL)
+inline EncoderSource OPEN_SOURCE (std::string& path_, const Context context = NULL)
 {
+    std::filesystem::path path (path_);
     if (!std::filesystem::exists(path)) throw std::runtime_error
-        ("File system failed to identify source file " + path);
+        ("File system failed to identify source file " + path.string());
     
     if (is_iris_codec_file(path)) {
         EncoderSource source;
@@ -472,6 +544,32 @@ inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NUL
             
         return source;
     }
+    
+    // If the path ends in a DICOM Extension, try DICOM
+    if (path.extension() == ".dcm") try {
+        if (auto handle = open_dicom_file(path)) {
+            EncoderSource source;
+            source.sourceType   = EncoderSource::ENCODER_SRC_DICOM;
+            source.dicomFile    = handle;
+            source.extent       = READ_EXTENT_DICOM(handle);
+            source.encoding     = get_dicom_encoding(handle);
+            
+            return source;
+        }
+    } catch (std::runtime_error &error) {
+        std::cout   << "[WARNING] Failed to establish DICOM source \'"
+                    << path_ << "\' as an encoder source: "
+                    << error.what() << ". Reattempting using OpenSlide.\n";
+        goto TRY_OPENSLIDE;
+    }
+    
+    
+    if (path.extension() == ".svs") try {
+        
+    } catch (std::runtime_error &e) {
+        
+    }
+    TRY_OPENSLIDE:
     #if IRIS_INCLUDE_OPENSLIDE
     if (openslide_detect_vendor(path.c_str())) {
         EncoderSource source;
@@ -504,18 +602,35 @@ inline BYTE* FILE_CHECK_EXPAND (const File& file, size_t required_size)
             ("Failed to resize slide file "+file->path+": " + result.message);
     } return file->ptr;
 }
-inline TileRead READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, TileIndex tile)
+inline Buffer GET_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, TileIndex tile)
 {
     switch (src.sourceType) {
-            
+        case EncoderSource::ENCODER_SRC_UNDEFINED: throw std::runtime_error("Cannot read source tile; undefined source");
+        case EncoderSource::ENCODER_SRC_IRISSLIDE:
+            return src.irisSlide->get_slide_tile_entry(layer, tile);
+        case EncoderSource::ENCODER_SRC_OPENSLIDE:
+            #if IRIS_INCLUDE_OPENSLIDE
+            return NULL;
+            #else
+            throw std::runtime_error("Openslide linkage was NOT compiled into this binary. Request a new version of Iris Codec with OpenSlide support if you would like to decode slide scanning vendor slide files only accessable to OpenSlide.");
+            #endif
+        case EncoderSource::ENCODER_SRC_DICOM:
+            return GET_DICOM_TILE(src, layer, tile);
+        case EncoderSource::ENCODER_SRC_APERIO:
+            throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
+    }
+    return NULL;
+}
+inline Buffer READ_SOURCE_TILE (const Context& ctx, const EncoderSource& src, LayerIndex layer, TileIndex tile)
+{
+    switch (src.sourceType) {
         case EncoderSource::ENCODER_SRC_UNDEFINED: throw std::runtime_error("Cannot read source tile; undefined source");
         case EncoderSource::ENCODER_SRC_IRISSLIDE:
             return IrisCodec::read_slide_tile (SlideTileReadInfo{
                 .slide          = src.irisSlide,
                 .layerIndex     = layer,
                 .tileIndex      = tile,
-                .desiredFormat  = src.format
-        });
+                .desiredFormat  = FORMAT_R8G8B8A8});
         case EncoderSource::ENCODER_SRC_OPENSLIDE:
             #if IRIS_INCLUDE_OPENSLIDE
             return READ_OPENSLIDE_TILE (src, layer, tile);
@@ -523,9 +638,17 @@ inline TileRead READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, Ti
             throw std::runtime_error("Openslide linkage was NOT compiled into this binary. Request a new version of Iris Codec with OpenSlide support if you would like to decode slide scanning vendor slide files only accessable to OpenSlide.");
             #endif
             
+        case EncoderSource::ENCODER_SRC_DICOM: {
+            return ctx->decompress_tile({
+                .compressed     = GET_DICOM_TILE(src, layer, tile),
+                .desiredFormat  = FORMAT_R8G8B8A8,
+                .encoding       = get_dicom_encoding(src.dicomFile)
+            });
+        }
         case EncoderSource::ENCODER_SRC_APERIO:
             throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
-    } return Buffer();
+    }
+    return NULL;
 }
 inline static void ENCODE_SOURCE_PYRAMID (const Context ctx,
                                           const EncoderSource& src,
@@ -560,20 +683,23 @@ inline static void ENCODE_SOURCE_PYRAMID (const Context ctx,
             auto STATUS = TILE_FREE;
             if (tile.status.compare_exchange_strong(STATUS, TILE_READING)==false)
                 continue;
+            
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
             //  READ TILE STEP
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-            auto pixel_array = READ_SOURCE_TILE(src, __LI, __TI);
-            if (!pixel_array) throw std::runtime_error("Failed to read slide image data");
-            //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-            //  COMPRESS PIXEL ARRAY STEP
-            //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-            auto bytes      = ctx->compress_tile({
-                .pixelArray = pixel_array,
-                .format     = src.format,
-                .encoding   = table.encoding
-            });
+            auto bytes           = GET_SOURCE_TILE (src, __LI, __TI);
+            if  (bytes == NULL) {
+                auto pixel_array = READ_SOURCE_TILE (ctx, src, __LI, __TI);
+                if (!pixel_array) throw std::runtime_error
+                    ("Failed to read slide image data");
+                bytes = bytes      = ctx->compress_tile({
+                    .pixelArray = pixel_array,
+                    .format     = src.format,
+                    .encoding   = table.encoding
+                });
+            }
             if (!bytes) throw std::runtime_error("Failed to compress slide image data");
+            
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
             //  WRITE TO FILE STEP
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -598,7 +724,6 @@ inline static void ENCODE_SOURCE_PYRAMID (const Context ctx,
             auto dst = file->ptr + entry.offset;
             memcpy(dst, bytes->data(), entry.size);
             shared_write_lock.unlock();
-            // TODO: Should we file synchronize (POSIX msyc) here? Seems like unecessary overhead
             
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
             //  RELEASE TILE STEP
@@ -648,7 +773,16 @@ inline static void ENCODE_DERIVE_PYRAMID (const Context ctx,
                 //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
                 //  READ TILE STEP
                 //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-                tile.pixels = READ_SOURCE_TILE(src, src_l, __TI);
+                tile.stream     = GET_SOURCE_TILE (src, src_l, __TI);
+                if (tile.stream) {
+                    tile.pixels = ctx->decompress_tile({
+                        .compressed     = tile.stream,
+                        .desiredFormat  = FORMAT_R8G8B8A8,
+                        .encoding       = src.encoding,
+                    });
+                }
+                if (tile.pixels == NULL)
+                    tile.pixels = READ_SOURCE_TILE(ctx, src, src_l, __TI);
                 if (!tile.pixels) throw std::runtime_error("Failed to read slide image data");
                 //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
                 //  PROPOGATE TILE ENCODING STEP
@@ -672,7 +806,6 @@ inline void VALIDATE_TILE_WRITES (const EncoderTracker& tracker, const Abstracti
         throw std::runtime_error("Tile encoder tracker and tile ptr map mismatch. File corruption.");
     for (int layer_idx = U32_CAST(tracker.layers.size()-1); layer_idx>=0; --layer_idx) {
         auto&& tracker_layer = tracker.layers[layer_idx];
-        auto&& table_layer   = table.layers[layer_idx];
         for (auto tile_idx = 0; tile_idx < tracker_layer.size(); ++tile_idx) {
             if (tracker_layer[tile_idx].status != TILE_COMPLETE) {
                 std::cout << "[" << layer_idx << ","
@@ -763,7 +896,7 @@ inline Offset RESERVE_METADATA (const File& file, atomic_uint64& offset)
     FILE_CHECK_EXPAND(file, offset);
     return  metadata_offset;
 }
-inline Metadata READ_METADATA (const EncoderSource& source) {
+inline Metadata READ_METADATA (const EncoderSource& source, const Extent& extent) {
     switch (source.sourceType) {
         case EncoderSource::ENCODER_SRC_UNDEFINED:
             throw std::runtime_error
@@ -771,7 +904,9 @@ inline Metadata READ_METADATA (const EncoderSource& source) {
         case EncoderSource::ENCODER_SRC_IRISSLIDE:
             return source.irisSlide->get_slide_info().metadata;
         case EncoderSource::ENCODER_SRC_OPENSLIDE:
-            return READ_OPENSLIDE_METADATA(source);
+            return READ_OPENSLIDE_METADATA(source,extent);
+        case EncoderSource::ENCODER_SRC_DICOM:
+            return READ_DICOM_METADATA(source,extent);
         case EncoderSource::ENCODER_SRC_APERIO:
             //TODO: APERIO READ METADATA
             throw std::runtime_error
@@ -945,7 +1080,7 @@ inline void STORE_METADATA (const File& file,
 {
     Serialization::STORE_METADATA(file->ptr, {
         .metadataOffset     = metadata_offset,
-        .codecVersion       = get_codec_version(),
+        .codecVersion       = metadata.codec,
         .attributes         = attributes_offset,
         .images             = images_offset,
         .ICC_profile        = ICC_offset,
@@ -1078,7 +1213,15 @@ Result __INTERNAL__Encoder::dispatch_encoder()
     // there will be a separate main thread that waits upon the encoding
     // threads. This is threads[0]. We will move the remainder of the
     // method to this separate thread...
-    _threads    = Threads(std::thread::hardware_concurrency()+1);
+    switch (source.sourceType) {
+        // LibDICOM is not thread safe. Only read from 1 thread...
+        case EncoderSource::ENCODER_SRC_DICOM:
+            _threads    = Threads(2);
+            break;
+        default:
+            _threads    = Threads(_concurrency+1);
+            break;
+    }
     _threads[0] = std::thread {[this, file, source, extent, dst_file_path](){
         
         // ~~~ We are now on the separate asynchronous main thread ~~~
@@ -1105,7 +1248,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
         
         // Create the downsample information struct
         // WARNING: THIS MUST PERSIST UNTIL ALL ASYNC THREADS ARE COMPLETE
-        const DerivationQueue queue = Iris::Async::createThreadPool();
+        const auto queue = _derive?Iris::Async::createThreadPool(_concurrency):NULL;
         const DerivationInfo downsample_info {
             .context    = _context,
             .queue      = queue,
@@ -1134,6 +1277,11 @@ Result __INTERNAL__Encoder::dispatch_encoder()
                     // This lambda function starts the propagation of encoding
                     // the slide pyramid by enqueueing downsampling / writing
                     [this,downsample_info](uint32_t l, uint32_t y, uint32_t x){
+                        auto& queue = downsample_info.queue;
+                        // If the queue has more than 2GB pending...
+                        // Slow the reads down to let the sampler keep up.
+                        while (queue->pending_tasks() > 2E9/TILE_PIX_BYTES_RGBA)
+                            std::this_thread::sleep_for(std::chrono::milliseconds(1));
                         downsample_info.queue->issue_task
                         (std::bind(ENCODE_DERIVED_TILE ,downsample_info,
                                    &_status, l, y, x));
@@ -1177,7 +1325,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
         
         try {
             // Read the source metadata
-            Metadata metadata           = READ_METADATA (source);
+            Metadata metadata           = READ_METADATA (source, tile_table.extent);
             
             // Reserve space for the Metadata block. I like to put it earlier
             // as it has no signficant risk of growing in size with file modification

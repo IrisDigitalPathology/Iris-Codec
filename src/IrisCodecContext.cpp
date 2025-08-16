@@ -623,6 +623,8 @@ Buffer __INTERNAL__Context::compress_tile(const CompressTileInfo &info) const
 }
 Buffer __INTERNAL__Context::decompress_tile(const DecompressTileInfo &info) const
 {
+    if (info.compressed == NULL) throw std::runtime_error
+        ("Cannot decompress tile without a valid compressed source buffer");
     switch (info.encoding) {
         case TILE_ENCODING_UNDEFINED:
             throw std::runtime_error("Encoding format in DecompressTileInfo is undefined");

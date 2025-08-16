@@ -8,8 +8,8 @@
 #ifndef IrisCodecPrivTypes_h
 #define IrisCodecPrivTypes_h
 extern "C" {
-typedef struct tiff         TIFF;
-typedef struct _openslide   openslide_t;
+typedef struct _openslide       openslide_t;
+typedef struct tiff             TIFF;
 }
 namespace IrisCodec {
 using       Tile            = std::shared_ptr<class __INTERNAL__Tile>;
@@ -97,6 +97,7 @@ using SubtileTracker            = std::atomic<Subtile>;
 static_assert(std::is_same<Subtile, uint16_t>::value,
 "If you change/expand subtile flag, remember to update the \
 SUBTILESCMPLT to the max value of the new type");
+using DcmFile = std::shared_ptr<struct __INTERNAL__DcmFile>;
 struct TileTracker {
     std::atomic<__tileStatus>   status;
     SubtileTracker              subtile;
@@ -111,11 +112,14 @@ struct EncoderSource {
         ENCODER_SRC_UNDEFINED   = 0,
         ENCODER_SRC_IRISSLIDE,
         ENCODER_SRC_OPENSLIDE,
+        ENCODER_SRC_DICOM,
         ENCODER_SRC_APERIO,
     }               sourceType  = ENCODER_SRC_UNDEFINED;
     Format          format      = Iris::FORMAT_UNDEFINED;
+    Encoding        encoding    = TILE_ENCODING_UNDEFINED;
     Extent          extent;
     Slide           irisSlide   = NULL;
+    DcmFile         dicomFile   = NULL;
     openslide_t*    openslide   = NULL;
     TIFF*           svs         = NULL;
 };
@@ -133,31 +137,6 @@ struct EncoderTracker {
     completed       (0),
     total           (0){}
 };
-
-//using DerivationQueue = std::unique_ptr<struct __INTERNAL__DerivationQueue>;
-//struct __INTERNAL__DerivationQueue {
-//    enum __status {
-//        QUEUE_ACTIVE            = 0,    // Waiting on tasks
-//        QUEUE_DRAINING          = 0x01, // Will exit upon no more tasks
-//        QUEUE_TERMINATE         = 0x11, // Will not accept new tasks; exit ASAP
-//    };
-//    using TaskList              = Iris::FIFO2::Queue<Iris::LambdaPtr>;
-//    using Status                = std::atomic<__status>;
-//    TaskList        tasks;
-//    Threads         threads;
-//    Mutex           task_added_mtx; // Used only for conditional variable
-//    Notification    task_added;     // Conditional variable notification
-//    Status          status;
-//    explicit __INTERNAL__DerivationQueue    (uint32_t thread_pool_size);
-//    __INTERNAL__DerivationQueue             (const __INTERNAL__DerivationQueue&) = delete;
-//    __INTERNAL__DerivationQueue& operator = (const __INTERNAL__DerivationQueue&) = delete;
-//   ~__INTERNAL__DerivationQueue             ();
-//    void issue_task                         (const LambdaPtr&);
-//    void wait_until_complete                ();
-//    void terminate_execution                ();
-//private:
-//    void process_tasks                      ();
-//};
 struct DerivationInfo {
     using Queue                 = Async::ThreadPool;
     using Strategy              = EncoderDerivation;

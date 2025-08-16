@@ -14,6 +14,9 @@ Iris::Extent GENERATE_DERIVED_EXTENT (const EncoderDerivation &_derivation, cons
     int8_t __bm = 0; // Bit-mask
     int8_t __li = -1; // Layer index
     switch (_derivation.layers) {
+        case EncoderDerivation::ENCODER_DERIVE_UNDEFINED:
+            throw std::runtime_error
+            ("GENERATE_DERIVED_EXTENT _derivation.layers is ENCODER_DERIVE_UNDEFINED");
         case EncoderDerivation::ENCODER_DERIVE_2X_LAYERS:
             __bs            = 1; // 2x downsample
             __bm            = 0x01; // Odd bitmask
@@ -117,6 +120,9 @@ inline void SET_SUBTILE_TRACKER (SubtileTracker& subtile,
     uint32_t yTiles = extent.yTiles, xTiles = extent.xTiles;
     unsigned y_extent, x_extent;
     switch (info.strategy.layers) {
+        case EncoderDerivation::ENCODER_DERIVE_UNDEFINED:
+            throw std::runtime_error
+            ("SET_SUBTILE_TRACKER info.strategy.layers is ENCODER_DERIVE_UNDEFINED");
         case EncoderDerivation::ENCODER_DERIVE_2X_LAYERS:
             
             // This checks if the subtile is in a partially filled derived tile
@@ -171,6 +177,9 @@ inline void DOWNSAMPLE_TILE (const DerivationInfo& info,
     uint32_t n_y,n_x;
     std::function<uint16_t(const Buffer&, const Buffer&,uint32_t,uint32_t,uint8_t)> downsample;
     switch (info.strategy.layers) {
+        case EncoderDerivation::ENCODER_DERIVE_UNDEFINED:
+            throw std::runtime_error
+            ("DOWNSAMPLE_TILE info.strategy.layers is ENCODER_DERIVE_UNDEFINED");
         case EncoderDerivation::ENCODER_DERIVE_2X_LAYERS:
             downsample  = DOWNSAMPLE_2x_AVG;
             n_y     = y>>1;
