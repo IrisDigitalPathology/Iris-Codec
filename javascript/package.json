@@ -25,7 +25,7 @@
   ],
   "author": "Ryan Landvater",
   "license": "MIT",
-  "readme": "../README.md",
+  "readme": "README.md",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/IrisDigitalPathology/Iris-Codec.git"

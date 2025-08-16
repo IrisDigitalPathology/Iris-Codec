@@ -504,7 +504,7 @@ inline BYTE* FILE_CHECK_EXPAND (const File& file, size_t required_size)
             ("Failed to resize slide file "+file->path+": " + result.message);
     } return file->ptr;
 }
-inline Buffer READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, TileIndex tile)
+inline TileRead READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, TileIndex tile)
 {
     switch (src.sourceType) {
             
