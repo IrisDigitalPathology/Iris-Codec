@@ -48,8 +48,12 @@ jobs:
     
     - name: Fetch Dependencies
       run: |
-        sudo apt install libhwy-dev libjpeg-turbo-official libavif-dev libpng-dev zlib1g-dev openslide-tools python3-dev -y
-
+        sudo apt install libhwy-dev \
+        libjpeg-turbo-official \
+        libavif-dev libpng-dev \
+        zlib1g-dev openslide-tools \
+        python3-dev \
+        meson ninja-build -y
     
     - name: Configure CMake
       run: >

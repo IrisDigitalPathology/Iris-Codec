@@ -7,7 +7,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <dicom.h>
+#include <dicom/dicom.h>
 #ifdef __cplusplus
 }
 #endif

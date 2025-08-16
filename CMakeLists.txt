@@ -129,7 +129,7 @@ include(./cmake/hwy.cmake)
 include(./cmake/turbo-jpeg.cmake)
 include(./cmake/avif.cmake)
 include(./cmake/png.cmake)
-
+include(./cmake/dicom.cmake)
 # Include Encoder-required external projects
 if (IRIS_BUILD_ENCODER)
     if (IRIS_USE_OPENSLIDE)
@@ -140,6 +140,7 @@ if (IRIS_BUILD_ENCODER)
     else ()
         add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=0)
     endif()
+    
 endif(IRIS_BUILD_ENCODER)
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Iris Codec Universal Object Build
@@ -158,6 +159,7 @@ set (
     IrisCodecEncoderSources
     ${irisheaders_SOURCE_DIR}/src/IrisAsync.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecDeriveLayers.cpp
+    ${CODEC_SOURCE_DIR}/IrisCodecDcmBridge.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp
 )
 set (
@@ -179,6 +181,7 @@ set (
     IrisCodecEncoderDependencies
     ${IrisCodecDependencies}
     ${OPENSLIDE_LIB}
+    ${LIBDICOM_LIBRARY}
     Threads::Threads
 )
 add_library(
@@ -270,6 +273,9 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         PRIVATE ${IrisCodecEncoderDependencies}
     )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodecEncoder)
+    if (LIBDICOM_EXTERNAL_PROJECT_ADD)
+        add_dependencies(IrisCodecEncoder libdicom)
+    endif()
 endif()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

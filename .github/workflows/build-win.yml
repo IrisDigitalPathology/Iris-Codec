@@ -51,6 +51,11 @@ jobs:
         ${{ github.workspace }}\vcpkg\bootstrap-vcpkg.bat &&
         ${{ github.workspace }}\vcpkg\vcpkg.exe install highway libjpeg-turbo libavif libpng --binarysource="clear;x-gha,readwrite"
 
+    - name: Install Meson
+      run: |
+        python -m pip install --upgrade pip
+        pip install meson ninja
+        
     - name: Configure CMake
       run: >
         cmake -GNinja -B ${{ steps.strings.outputs.build-output-dir }}
