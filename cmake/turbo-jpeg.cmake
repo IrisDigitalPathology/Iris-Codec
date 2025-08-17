@@ -1,3 +1,5 @@
+include(ExternalProject)
+
 set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
 if(WIN32)
     set(STATIC_LIB_SUFFIX .lib)

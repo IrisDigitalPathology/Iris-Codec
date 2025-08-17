@@ -17,7 +17,7 @@ namespace py    = pybind11;
 
 #include "IrisTypesPython.hpp"
 #include "IrisCodecPython.hpp"
-PYBIND11_MODULE(Iris, m)
+PYBIND11_MODULE(iris_core, m)
 {
     // Creae the Iris Core Submodule
     DEFINE_IRIS_TYPES  (m);

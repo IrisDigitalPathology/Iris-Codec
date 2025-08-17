@@ -181,7 +181,7 @@ set (
     IrisCodecEncoderDependencies
     ${IrisCodecDependencies}
     ${OPENSLIDE_LIB}
-    ${LIBDICOM_LIBRARY}
+    ${DICOM_LIBRARY}
     Threads::Threads
 )
 add_library(
@@ -273,7 +273,7 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         PRIVATE ${IrisCodecEncoderDependencies}
     )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodecEncoder)
-    if (LIBDICOM_EXTERNAL_PROJECT_ADD)
+    if (DICOM_EXTERNAL_PROJECT_ADD)
         add_dependencies(IrisCodecEncoder libdicom)
     endif()
 endif()
@@ -349,7 +349,7 @@ if(IRIS_BUILD_PYTHON)
     )
     set_property(
         TARGET IrisCodecPython
-        PROPERTY OUTPUT_NAME Iris
+        PROPERTY OUTPUT_NAME iris_core
     )
     target_compile_definitions (
         IrisCodecPython
@@ -365,12 +365,10 @@ if(IRIS_BUILD_PYTHON)
         DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris
     )
     if (IRIS_BUILD_ENCODER)
-        # Copy install the python source files
         install(
             DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris/Encoder
             DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/
         )
-        # Then build the Python module
         pybind11_add_module(
             IrisCodecEncoderPython
             $<TARGET_OBJECTS:IrisFileExtensionLib>
@@ -385,7 +383,7 @@ if(IRIS_BUILD_PYTHON)
         )
         set_property(
             TARGET IrisCodecEncoderPython
-            PROPERTY OUTPUT_NAME Encoder
+            PROPERTY OUTPUT_NAME encoder
         )
         target_compile_definitions (
             IrisCodecEncoderPython
@@ -396,6 +394,9 @@ if(IRIS_BUILD_PYTHON)
             PRIVATE IrisHeaders
             PRIVATE ${IrisCodecEncoderDependencies}
         )
+        if (DICOM_EXTERNAL_PROJECT_ADD)
+            add_dependencies(IrisCodecEncoderPython libdicom)
+        endif()
         install(
             TARGETS IrisCodecEncoderPython
             DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/Encoder

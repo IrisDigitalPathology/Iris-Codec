@@ -1,13 +1,11 @@
 """
-Codec submodule that provides access to Iris Encoded Slide Files.
+This is the Codec submodule that allows access to Iris Encoded Slide Files
 """
-
+import Iris.Iris
 from __future__ import annotations
 import numpy
 import numpy.typing
 import typing
-from .iris_core import Format, Result, Version, Extent
-
 __all__ = ['AssociatedImageEncoding', 'AssociatedImageInfo', 'Attributes', 'Context', 'Encoding', 'Metadata', 'MetadataType', 'Slide', 'SlideInfo', 'get_codec_version', 'open_slide', 'validate_slide_path']
 class AssociatedImageEncoding:
     """
@@ -66,7 +64,7 @@ class AssociatedImageInfo:
     def image_label(self) -> str:
         ...
     @property
-    def source_format(self) -> Format:
+    def source_format(self) -> Iris.Iris.Format:
         ...
     @property
     def width(self) -> int:
@@ -163,7 +161,7 @@ class Metadata:
     def attributes(self) -> Attributes:
         ...
     @property
-    def codec_version(self) -> Version:
+    def codec_version(self) -> Iris.Iris.Version:
         ...
     @property
     def icc_profile(self) -> str:
@@ -222,11 +220,11 @@ class Slide:
     """
     Iris Codec Slide (distinct from Iris Core Slide, loader class) is a light-weight wrapper around a whole slide image file used to access slide information and raw image data
     """
-    def get_associated_image_info(self, image_label: str) -> tuple[Result, AssociatedImageInfo]:
+    def get_associated_image_info(self, image_label: str) -> tuple[Iris.Iris.Result, AssociatedImageInfo]:
         """
         Return image information about an associated image such as label or thumbnail
         """
-    def get_info(self) -> tuple[Result, SlideInfo]:
+    def get_info(self) -> tuple[Iris.Iris.Result, SlideInfo]:
         ...
     def read_associated_image(self, image_label: str) -> numpy.typing.NDArray[numpy.uint8]:
         """
@@ -252,12 +250,12 @@ class SlideInfo:
     def encoding(self) -> Encoding:
         ...
     @property
-    def extent(self) -> Extent:
+    def extent(self) -> Iris.Iris.Extent:
         ...
     @property
     def metadata(self) -> Metadata:
         ...
-def get_codec_version() -> Version:
+def get_codec_version() -> Iris.Iris.Version:
     """
     Get version of the Iris Codec module specifically, which is distinct from the overall Iris version (Iris.Core.get_version())
     """
@@ -265,7 +263,7 @@ def open_slide(file_path: str, codec_context: Context = None, write_access: bool
     """
     Method to open a whole slide image file at the given file path with optional Iris Codec Context for efficiency and GPU optimizations as well as a write_access boolean flag request mutable access. Returns a NULL object on failure. For more information about failure, use validate_slide_path and examine the result.message
     """
-def validate_slide_path(file_path: str) -> Result:
+def validate_slide_path(file_path: str) -> Iris.Iris.Result:
     """
     Method to validate a whole slide image file to assess if the file path can produce a valid Iris Codec Slide. Returns a Result with possible erorr message on failure
     """

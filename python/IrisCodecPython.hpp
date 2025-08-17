@@ -10,7 +10,7 @@
  *
  */
 #include "IrisCodecPriv.hpp"
-//#include "IrisCodecExtensionPython.hpp"
+#include <iomanip>
 namespace IrisCodec {
 Version _get_codec_version ()
 {
@@ -177,6 +177,23 @@ inline std::string PRINT_ENCODING (Encoding encoding)
     descr << "\n";
     return descr.str();
 }
+inline std::string PRINT_METADATA_TYPE (MetadataType type)
+{
+    std::stringstream descr;
+    descr << "Metadata Type: ";
+    switch (type) {
+        case METADATA_UNDEFINED:
+            descr << "Undefined";
+            break;
+        case METADATA_I2S:
+            descr << "I2S";
+            break;
+        case METADATA_DICOM:
+            descr << "DICOM";
+            break;
+    }
+    return descr.str();
+}
 inline std::string _read_attribute (const Attributes& attributes, const std::string& key)
 {
     auto value = attributes.find(key);
@@ -188,10 +205,33 @@ inline std::string PRINT_ATTRIBUTE_LIST (const Attributes& attributes)
 {
     std::stringstream descr;
     descr   << "Slide attributes:\n";
+    descr   << "Attributes type: " << PRINT_METADATA_TYPE(attributes.type) << "\n";
+    descr   << "Attributes version: " << attributes.version << "\n";
+    switch (attributes.type) {
+    case METADATA_I2S:
     for (auto&& attr : attributes)
         descr   << "\t" << attr.first << ": "
                 << std::string(attr.second.begin(),attr.second.end())
                 << "\n";
+        break;
+    case METADATA_DICOM:
+    for (auto&& attr : attributes) try {
+        unsigned int tag = std::stoul(attr.first);
+        unsigned int group = (tag >> 16) & 0xFFFF;
+        unsigned int element = tag & 0xFFFF;
+        descr   << "\t(" << std::hex << std::uppercase << std::setfill('0')
+                << std::setw(4) << group << ","
+                << std::setw(4) << element << ")" << std::dec << ": ";
+        descr   << std::string(attr.second.begin(),attr.second.end())
+                << "\n";
+    } catch (...) {
+        descr   << "\t" << attr.first << ": "
+                << std::string(attr.second.begin(),attr.second.end())
+                << "\n";
+    }
+    default:
+        break;
+    }
     return descr.str();
 }
 inline std::string PRINT_ASSOCIATED_IMAGE_LIST (const Metadata::ImageLabels& labels)
@@ -209,21 +249,18 @@ inline std::string PRINT_METADATA (const Metadata metadata)
                 << metadata.codec.major << "."
                 << metadata.codec.minor << "."
                 << metadata.codec.build  << "\n";
+
+    descr   << "Attributes:\n"
+            << PRINT_ATTRIBUTE_LIST(metadata.attributes);
     
-    descr   << "\tSlide attributes:\n";
-    for (auto&& attr : metadata.attributes)
-        descr   << "\t\t" << attr.first << ": "
-                << std::string(attr.second.begin(),attr.second.end())
-                << "\n";
-    
-    descr   << "\tAssociated Images:\n";
+    descr   << "Associated Images:\n";
     for (auto&& label : metadata.associatedImages)
-        descr   << "\t\t" << label << "\n";
+        descr   << "\t" << label << "\n";
     
-    descr   << "\tMagnification Coefficient: "
+    descr   << "Magnification Coefficient: "
             << metadata.magnification << "/scale\n";
     
-    descr   << "\tNormalized microns per pixel: "
+    descr   << "Normalized microns per pixel: "
             << metadata.micronsPerPixel << "um/pix/scale\n";
     
     return descr.str();
@@ -255,8 +292,16 @@ static inline void DEFINE_IRIS_CODEC_SUBMODULE (pybind11::module_& base)
         .value("TILE_ENCODING_IRIS",        TILE_ENCODING_IRIS)
         .value("TILE_ENCODING_DEFAULT",     TILE_ENCODING_DEFAULT)
         .def("__repr__",                    &PRINT_ENCODING);
-    
+
+    py::enum_<MetadataType>                                 (m, "MetadataType")
+        .value("METADATA_UNDEFINED",        METADATA_UNDEFINED)
+        .value("METADATA_I2S",              METADATA_I2S)
+        .value("METADATA_DICOM",            METADATA_DICOM)
+        .def("__repr__",                    &PRINT_METADATA_TYPE);
+
     py::class_<Attributes>                                  (m, "Attributes")
+        .def_readonly("type",               &Attributes::type)
+        .def_readonly("version",            &Attributes::version)
         .def("__getitem__",                 &_read_attribute,
              py::arg("key"), "Return the slide attribute value associated with the provided key/token")
         .def("__repr__",                    &PRINT_ATTRIBUTE_LIST)
@@ -275,6 +320,7 @@ static inline void DEFINE_IRIS_CODEC_SUBMODULE (pybind11::module_& base)
         .def_readonly("codec_version",      &Metadata::codec)
         .def_readonly("attributes",         &Metadata::attributes)
         .def_readonly("associated_images",  &Metadata::associatedImages)
+        .def_readonly("icc_profile",        &Metadata::ICC_profile)
         .def_readonly("annotations",        &Metadata::annotations)
         .def_readonly("annotation_groups",  &Metadata::annotationGroups)
         .def_readonly("microns_per_pixel",  &Metadata::micronsPerPixel)

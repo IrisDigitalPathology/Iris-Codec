@@ -1,11 +1,35 @@
 from __future__ import absolute_import
-import os, platform, sys, time
-from .. import Iris
-from ..Iris import Codec
-from .Encoder import *
+import os, platform, sys, time, multiprocessing
+
+# Import core types from parent Iris module FIRST to register types
+from .. import iris_core
+from ..iris_core import Result, Format
+
+# Import codec functionality 
+from .. import Codec
+from ..Codec import Context
+
+# Import all encoder functionality from the renamed C++ extension
+# This must come AFTER the core types are imported to avoid type registration issues
+from .encoder import *
+
 __all__ = ['encode_slide_file']
-def encode_slide_file (source: str, outdir: str = '', desired_encoding: Codec.Encoding = Codec.Encoding.TILE_ENCODING_JPEG, desired_byte_format: Iris.Format = Iris.Format.FORMAT_R8G8B8, strip_metadata: bool = False) -> Iris.Result:
+
+def encode_slide_file(source: str, 
+                      outdir: str = '', 
+                      desired_encoding: Codec.Encoding = Codec.Encoding.TILE_ENCODING_JPEG, 
+                      desired_byte_format: Format = Format.FORMAT_R8G8B8, 
+                      strip_metadata: bool = False, 
+                      anonymize: bool = False, 
+                      derivation: EncoderDerivation = EncoderDerivation.layer_2x, 
+                      concurrency: int = None, 
+                      codec_context: Context = None) -> Result:
     encoder = None
+    
+    # Default concurrency to CPU count if not specified
+    if concurrency is None:
+        concurrency = multiprocessing.cpu_count()
+    
     try: 
         # Check the source file to see if it is a valid OS file path
         if (os.path.isfile(source) == False):
@@ -17,7 +41,7 @@ def encode_slide_file (source: str, outdir: str = '', desired_encoding: Codec.En
             print(f"No destination or invalid directory provided. Selecting source directory instead: {outdir}")
         
         # Create the Iris Codec Encoder
-        encoder = create_encoder(source, outdir, desired_encoding, desired_byte_format)
+        encoder = create_encoder(source, outdir, desired_encoding, desired_byte_format, anonymize, derivation, concurrency, codec_context)
         if (encoder == None): 
             raise Exception("Failed to create an Iris Encoder")
         

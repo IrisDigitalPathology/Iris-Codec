@@ -37,7 +37,6 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
         echo "install-dir=${{ github.workspace }}/${{ inputs.artifact }}" >> "$GITHUB_OUTPUT"
 
-
     - name: Configure Jpeg-Turbo PPA
       run: |
         sudo wget -q https://packagecloud.io/dcommander/libjpeg-turbo/gpgkey -O /etc/apt/trusted.gpg.d/libjpeg-turbo &&

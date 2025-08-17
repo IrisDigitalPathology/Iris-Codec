@@ -1,8 +1,22 @@
+/**
+ * @file IrisCodecDcmBridge.cpp
+ * @author your name (you@domain.com)
+ * @brief
+ * @version 0.1
+ * @date 2025-08-16
+ *
+ * This file provides a bridge for working with DICOM files
+ * in the Iris Codec Encoder. It includes utilities for reading
+ * DICOM metadata, extracting image frames, and handling
+ * DICOM-specific attributes. The code is designed to simplify
+ * DICOM parsing and ensure compatibility with the Iris Codec's requirements.
+ *
+ * @copyright Copyright (c) 2025
+ *
+ */
 #include "IrisCodecPriv.hpp"
 #include <filesystem>
-#include <vector>
-#include <string>
-#include <memory>
+#include <sstream>
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,6 +109,7 @@ inline DicomLevelDimension GET_LEVEL_DIMENSION
         const auto c_err = dcm_error_get_message(error);
         std::string msg = c_err?c_err:"";
         dcm_error_clear(&error);
+        throw std::runtime_error
         ("Failed to get TotalPixelMatrixColumns value for level " + msg);
     }
     element = dcm_dataset_get(&error, dataset, 0x00480007);
@@ -128,13 +143,13 @@ inline std::vector<std::filesystem::path> FIND_DICOM_FILE_WITH_STUDY_UID
     std::vector<fs::path> result;
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (entry.is_regular_file() && entry.path().extension() == ".dcm") {
-            auto fh = dcm_filehandle_create_from_file(NULL, entry.path().c_str());
+            auto fh = dcm_filehandle_create_from_file(NULL, entry.path().string().c_str());
             if (fh) {
                 std::string uid = GET_STUDY_INSTANCE_UID(fh);
                 if (studyUID.compare(uid) == 0)
                     result.push_back(entry.path());
                 dcm_filehandle_destroy(fh);
-            } 
+            }
         }
     }
     return result;
@@ -253,20 +268,7 @@ FAILED_PARSE:
     return 0;
 }
 
-//std::stringstream stream;
-//stream << "{";
-//stream << "\"type\": \"slide_metadata\",";
-//if (info.format)
-//    stream  <<"\"format\": " << SERIALIZE_FORMAT (info.format) << ",";
-//if (info.encoding)
-//    stream  <<"\"encoding\": " << SERIALIZE_ENCODING(info.encoding) << ",";
-//
-//stream <<"\"extent\": ";
-//SERALIZE_SLIDE_EXTENT(info.extent,stream);
-//
-//stream.seekp(-1,stream.cur) << "}";
-//return stream.str();
-constexpr std::string quote = "\"";
+const std::string quote = "\"";
 static bool COLLECT_SEQ (const DcmDataSet* set, uint32_t index, void* stream_ptr);
 static bool COLLECT_SEQ_TAG (const DcmElement* element, void* stream_ptr) {
     auto& __stream = *reinterpret_cast
@@ -289,12 +291,14 @@ static bool COLLECT_SEQ_TAG (const DcmElement* element, void* stream_ptr) {
             return true;
         
         dcm_sequence_foreach(sequence, COLLECT_SEQ, &stream);
-        dcm_sequence_destroy(sequence);
         stream.seekp(-1, stream.cur) << "]";
         val = stream.str();
+        if (val.length() == 1) val = std::string();
     } else val = quote + dcm_element_value_to_string(element) + quote;
-    if (tag && val.size())
+    
+    if (tag && !val.empty())
         __stream <<"\"" << std::to_string(tag) << "\":" << val << ",";
+    
     return true;
 }
 static bool COLLECT_SEQ (const DcmDataSet* set, uint32_t index, void* stream_ptr) {
@@ -322,12 +326,12 @@ static bool COLLECT_TAG (const DcmElement* element, void* attr_ptr)
         dcm_sequence_foreach(sequence, COLLECT_SEQ, &stream);
         stream.seekp(-1, stream.cur) << "]";
         val = stream.str();
+        if (val.length() == 1) val = std::string();
     } else val = dcm_element_value_to_string(element);
-    if (tag && val.size())
+    
+    if (tag && !val.empty())
         attributes[std::to_string(tag)] = std::u8string((char8_t*)val.data());
-
-    std::cout << std::setfill('0') << std::setw(8) << std::hex << tag;
-    std::cout << ": " << reinterpret_cast<const char*>(attributes[std::to_string(tag)].data()) <<"\n";
+    
     return true;  // Continue iteration
 }
 const std::chrono::time_point NOW {std::chrono::system_clock::now()};
@@ -352,7 +356,6 @@ inline Metadata PARSE_DICOM_ATTRIBUTES (const DcmDataSet* ds, Metadata& metadata
         }
     }
     
-    
     if (!anonymize) {
         dcm_dataset_foreach(ds, COLLECT_TAG, &attrib);
     }
@@ -363,19 +366,25 @@ inline Metadata PARSE_DICOM_ATTRIBUTES (const DcmDataSet* ds, Metadata& metadata
 }
 inline void PARSE_ICC_PROFILE (const DcmDataSet* ds, Metadata& metadata)
 {
+    std::vector<uint32_t> tags {
+        dcm_dict_tag_from_keyword("OpticalPathSequence"),
+        dcm_dict_tag_from_keyword("ICCProfile")
+    };
+    const void* data = NULL;
+    DcmElement* element = PARSE_NESTED_ELEMENT(ds, tags);
     DcmError* error = NULL;
-    DcmElement* element = dcm_dataset_get(&error, ds, 0x00282000);
-    if (!element) return;
-    
-    const void* data = nullptr;
-    uint32_t length = dcm_element_get_length(element);
-    if (!dcm_element_get_value_binary(&error, element, &data) || !data) {
-        std::cout   << "[WARNING] Failed to retrieve ICC color profile "
-                    << dcm_error_get_message(error) << "\n";
-        dcm_error_clear (&error);
-        return;
+    if (!element ||
+        dcm_dict_vr_class(dcm_element_get_vr(element))!=DCM_VR_CLASS_BINARY ||
+        dcm_element_get_value_binary(&error, element, &data) == false) {
+        std::string msg = dcm_error_get_message(error)?dcm_error_get_message(error):"";
+        dcm_error_clear(&error);
+        std::cout   << "[WARNING] Failed to get DICOM OpticalPathSequence/"
+        << "ObjectiveLensPower/ nested sequence entry: "
+        << msg << ". The resulting slide will "
+        << "not be able to provide a microscope objective equivalent.\n";
     }
-    metadata.ICC_profile = std::string((char*)data, length);
+    metadata.ICC_profile = std::string
+    ((const char*)data, dcm_element_get_length(element));
 }
 struct __INTERNAL__DcmFile {
     using Levels = std::vector<DicomLevelDimension>;
@@ -577,6 +586,7 @@ Metadata get_dicom_metadata (DcmFile dicom, bool anonymize)
     
     PARSE_DICOM_ATTRIBUTES  (ds, metadata, anonymize);
     PARSE_ICC_PROFILE       (ds, metadata);
+    
     return metadata;
 }
 } // END IRIS CODEC NAMESPACE

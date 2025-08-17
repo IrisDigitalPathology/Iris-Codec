@@ -47,14 +47,24 @@ inline Encoder _create_encoder (const std::string& src_path,
                                 const std::string& dst_path,
                                 IrisCodec::Encoding desired_encoding,
                                 Iris::Format desired_format,
+                                bool anonymize,
+                                EncoderDerivation::Layers derivation,
+                                unsigned concurrency,
                                 Context context = NULL) {
+    EncoderDerivation d_strategy {
+        .layers             = derivation,
+        .method             = EncoderDerivation::ENCODER_DOWNSAMPLE_AVERAGE
+    };
     EncodeSlideInfo encoder_info {
         .srcFilePath        = src_path,
         .dstFilePath        = dst_path,
         .srcFormat          = FORMAT_UNDEFINED,
         .desiredEncoding    = desired_encoding,
         .desiredFormat      = desired_format,
-        .context            = context
+        // .anonymize          = anonymize,
+        .concurrency        = concurrency,
+        .context            = context,
+        .derivation         = derivation?&d_strategy:NULL,
     };
     return IrisCodec::create_encoder(encoder_info);
 }
@@ -74,7 +84,7 @@ inline std::tuple<Result,std::string> _get_encoder_dst_path(const Encoder& encod
     return {get_encoder_dst_path(encoder, dst_path), dst_path};
 }
 }
-PYBIND11_MODULE(Encoder, m)
+PYBIND11_MODULE(encoder, m)
 {
     using namespace IrisCodec;
     py::enum_<EncoderStatus>                                (m,"EncoderStatus")
@@ -82,6 +92,11 @@ PYBIND11_MODULE(Encoder, m)
         .value("ENCODER_ACTIVE",        ENCODER_ACTIVE)
         .value("ENCODER_ERROR",         ENCODER_ERROR)
         .value("ENCODER_SHUTDOWN",      ENCODER_SHUTDOWN);
+    
+    py::enum_<EncoderDerivation::Layers>                    (m,"EncoderDerivation")
+        .value("use_source",            EncoderDerivation::ENCODER_DERIVE_USE_SOURCE)
+        .value("layer_2x",              EncoderDerivation::ENCODER_DERIVE_2X_LAYERS)
+        .value("layer_4x",              EncoderDerivation::ENCODER_DERIVE_4X_LAYERS);
     
     py::class_<EncoderProgress>                             (m, "EncoderProgress")
         .def_readonly("status",         &EncoderProgress::status)
@@ -102,7 +117,7 @@ PYBIND11_MODULE(Encoder, m)
             return descriptor.str();
         })
         .doc()="Slide Encoder class used internally to generate a slide file. This class is stateful, thread-safe, and encodes a single slide at a time in parrallel using a massive amount of the machine's cores. Dispatching an encoder will bring your machine up to about 90-95% of the full CPU capacity so it is not recommended to use more than a single encoder at a time.";
-    
+
     m.def("create_encoder",&_create_encoder,
           "Method to create an encoder object",
           py::arg("source"),
@@ -113,6 +128,12 @@ PYBIND11_MODULE(Encoder, m)
           "Encoding algorithm used for tile compression. Please refer to 'Iris.Codec.Encoding' values for more information related to encoding types. This will default to the current Iris Codec version's implemenation of 'Default encoding'. ",
           py::arg("desired_byte_format") = Iris::FORMAT_R8G8B8A8,
           "Desired pixel byte format",
+          py::arg("anonymize") = false,
+          "Whether to strip metadata attributes that may contain PHI from the slide data",
+          py::arg("derivation") = IrisCodec::EncoderDerivation::ENCODER_DERIVE_2X_LAYERS,
+          "Desired pyramid downsampling structure. Default to 2x layers. Disable with \"use_source\".",
+          py::arg("concurrency") = std::thread::hardware_concurrency(),
+          "Maximum concurrent thread execution (Default highest performance)",
           py::arg("codec_context") = IrisCodec::Context(),
           "Iris Codec encoding context for GPU based compression");
     

@@ -169,12 +169,13 @@ Result set_encoder_dst_path(const Encoder &encoder, const std::string &dst_path)
 }
 __INTERNAL__Encoder::__INTERNAL__Encoder    (const EncodeSlideInfo& __i) :
 _concurrency                                (__i.concurrency),
-_derive                                     (__i.derviation),
+_derive                                     (__i.derivation),
 _context                                    (__i.context),
 _srcPath                                    (__i.srcFilePath),
 _dstPath                                    (__i.dstFilePath),
+_anonymize                                  (__i.anonymize),
 _encoding                                   (__i.desiredEncoding),
-_derivation                                 (_derive?*__i.derviation:EncoderDerivation()),
+_derivation                                 (_derive?*__i.derivation:EncoderDerivation()),
 _status                                     (ENCODER_INACTIVE)
 {
     
@@ -362,7 +363,7 @@ inline OpenSlideProperties PARSE_OPENSLIDE_PROPERTY (const char* const key_chars
     if (strcmp(key_chars, OPENSLIDE_PROPERTY_NAME_OBJECTIVE_POWER) == 0) return OBJECTIVE_POWER;
     return UNUSED;
 }
-inline Metadata READ_OPENSLIDE_METADATA (const EncoderSource src, const Extent& extent) {
+inline Metadata READ_OPENSLIDE_METADATA (const EncoderSource src, const Extent& extent, bool anonymize) {
     openslide_t* os = src.openslide;
     Metadata metadata;
     
@@ -501,11 +502,11 @@ inline Buffer GET_DICOM_TILE (const EncoderSource src, LayerIndex __LI, TileInde
     
     return get_dicom_frame_buffer(dicom, __LI, __TI+1);
 }
-inline Metadata READ_DICOM_METADATA (const EncoderSource src, const Extent& extent) {
+inline Metadata READ_DICOM_METADATA (const EncoderSource src, const Extent& extent, bool anonymize) {
     auto dicom = src.dicomFile;
     
     // Read the raw metadata from the DICOM image
-    Metadata metadata = get_dicom_metadata (dicom, false);
+    Metadata metadata = get_dicom_metadata (dicom, anonymize);
     
     // Inject the current codec version
     // NOTE: This is NOT the Iris File Extension version.
@@ -522,17 +523,17 @@ inline Metadata READ_DICOM_METADATA (const EncoderSource src, const Extent& exte
 // MARK: - APERIO SPECIFIC METHODS
 
 // MARK: - FILE ENCODING METHODS
-inline EncoderSource OPEN_SOURCE (std::string& path_, const Context context = NULL)
+inline EncoderSource OPEN_SOURCE (const std::string& path_, const Context context = NULL)
 {
     std::filesystem::path path (path_);
     if (!std::filesystem::exists(path)) throw std::runtime_error
         ("File system failed to identify source file " + path.string());
     
-    if (is_iris_codec_file(path)) {
+    if (is_iris_codec_file(path.string())) {
         EncoderSource source;
         source.sourceType   = EncoderSource::ENCODER_SRC_IRISSLIDE;
         source.irisSlide    = open_slide(SlideOpenInfo {
-            .filePath       = path,
+            .filePath       = path_,
             .context        = context,
             .writeAccess    = false,
         });
@@ -556,25 +557,27 @@ inline EncoderSource OPEN_SOURCE (std::string& path_, const Context context = NU
             
             return source;
         }
-    } catch (std::runtime_error &error) {
+    } catch (std::runtime_error &e) {
         std::cout   << "[WARNING] Failed to establish DICOM source \'"
                     << path_ << "\' as an encoder source: "
-                    << error.what() << ". Reattempting using OpenSlide.\n";
+                    << e.what() << ". Reattempting using OpenSlide.\n";
         goto TRY_OPENSLIDE;
     }
     
-    
     if (path.extension() == ".svs") try {
-        
+        // SVS WILL GO HERE
     } catch (std::runtime_error &e) {
-        
+        std::cout   << "[WARNING] Failed to establish Aperio SVS source \'"
+                    << path_ << "\' as an encoder source: "
+                    << e.what() << ". Reattempting using OpenSlide.\n";
+        goto TRY_OPENSLIDE;
     }
     TRY_OPENSLIDE:
     #if IRIS_INCLUDE_OPENSLIDE
-    if (openslide_detect_vendor(path.c_str())) {
+    if (openslide_detect_vendor(path_.c_str())) {
         EncoderSource source;
         source.sourceType   = EncoderSource::ENCODER_SRC_OPENSLIDE;
-        source.openslide    = openslide_open(path.c_str());
+        source.openslide    = openslide_open(path_.c_str());
         
         if (!source.openslide) throw std::runtime_error
             ("No valid openslide handle returned from openslide_open");
@@ -896,17 +899,22 @@ inline Offset RESERVE_METADATA (const File& file, atomic_uint64& offset)
     FILE_CHECK_EXPAND(file, offset);
     return  metadata_offset;
 }
-inline Metadata READ_METADATA (const EncoderSource& source, const Extent& extent) {
+inline Metadata READ_METADATA (const EncoderSource& source, const Extent& extent, bool anonymize) {
     switch (source.sourceType) {
         case EncoderSource::ENCODER_SRC_UNDEFINED:
             throw std::runtime_error
             ("READ_METADATA failed due to ENCODER_SRC_UNDEFINED source type");
-        case EncoderSource::ENCODER_SRC_IRISSLIDE:
-            return source.irisSlide->get_slide_info().metadata;
+        case EncoderSource::ENCODER_SRC_IRISSLIDE: {
+            auto metadata = source.irisSlide->get_slide_info().metadata;
+            if (anonymize)  {
+                metadata.attributes.clear();
+                metadata.associatedImages.clear();
+            } return metadata;
+        }
         case EncoderSource::ENCODER_SRC_OPENSLIDE:
-            return READ_OPENSLIDE_METADATA(source,extent);
+            return READ_OPENSLIDE_METADATA(source,extent,anonymize);
         case EncoderSource::ENCODER_SRC_DICOM:
-            return READ_DICOM_METADATA(source,extent);
+            return READ_DICOM_METADATA(source,extent,anonymize);
         case EncoderSource::ENCODER_SRC_APERIO:
             //TODO: APERIO READ METADATA
             throw std::runtime_error
@@ -969,6 +977,9 @@ inline Offset STORE_ASSOCIATED_IMAGES (const Context& ctx,
                         .encoding   = info.encoding,
                         .quality    = QUALITY_DEFAULT
                     });
+                    break;
+                case EncoderSource::ENCODER_SRC_DICOM:
+                    std::cout << "This implementation has not";
                     break;
                 case EncoderSource::ENCODER_SRC_APERIO:
                     //TODO: APERIO READ METADATA
@@ -1290,7 +1301,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
         for (auto thread_idx = 1; thread_idx < _threads.size(); ++thread_idx)
             if (_threads[thread_idx].joinable()) _threads[thread_idx].join();
         // Await asynchronous thread pool if encoding tasks were delegated
-        downsample_info.queue->wait_until_complete();
+        if (queue) queue->wait_until_complete();
         // It is NOW safe to destroy the downsample_info struct
         // ~~~~~~~~~~~~~~~~~~~~~ END TILE ENCODING ~~~~~~~~~~~~~~~~~~~~~~~~~
         
@@ -1325,7 +1336,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
         
         try {
             // Read the source metadata
-            Metadata metadata           = READ_METADATA (source, tile_table.extent);
+            Metadata metadata           = READ_METADATA (source, tile_table.extent, _anonymize);
             
             // Reserve space for the Metadata block. I like to put it earlier
             // as it has no signficant risk of growing in size with file modification
@@ -1407,9 +1418,5 @@ Result __INTERNAL__Encoder::interrupt_encoder()
         case ENCODER_SHUTDOWN:
             return IRIS_SUCCESS;
     }   return IRIS_FAILURE;
-}
-void __INTERNAL__Encoder::encode_derived_tile (uint32_t layer, uint32_t y, uint32_t x)
-{
-    
 }
 } // END IRIS CODEC NAMESPACE
