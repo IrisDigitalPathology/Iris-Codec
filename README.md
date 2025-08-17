@@ -2,202 +2,189 @@
 
 Copyright &copy; 2025 Iris Developers; MIT Software License
 
-The Iris Codec Community module is a part of the Iris Digital Pathology project. This module allows for:
-- Reading and writing of Iris whole slide image (WSI) digital slide files (*.iris*) and 
-- Decoding Iris Codec-type compressed tile image data. 
+The Iris Codec Community module is part of the Iris Digital Pathology project, enabling:
+- Reading and writing Iris whole slide image (WSI) files (*.iris*)
+- Decoding Iris Codec-compressed tile image data
 
-This repository was designed to allow for extremely fast slide access using a simple API. We want to simplify access to these files for you. This module [may be installed](README.md#installation) in the following forms:
-- Pre-compiled binaries in the [releases tab](https://github.com/IrisDigitalPathology/Iris-Codec/releases),
-- Source files with [CMake build scripts](README.md#c-and-c-implementations).
-- Prebuilt python modules are avilable via [Python package managers](README.md#python).
-- JavaScript WASM module via [jsDelivr](https://www.jsdelivr.com/package/npm/iris-codec)
-
-This module has relatively limited dependencies. As our encoder builds shift away from using OpenSlide, we will add additional library dependencies for reading vendor files. 
+This repository provides extremely fast slide access through a simple API. Available as:
+- [Pre-compiled binaries](https://github.com/IrisDigitalPathology/Iris-Codec/releases)
+- [CMake source builds](README.md#building-from-source)
+- [Python packages](README.md#python)
+- [JavaScript WASM module](https://www.jsdelivr.com/package/npm/iris-codec)
 
 > [!TIP]
-> **Iris Slide Files may immediately be used instead of deep zoom images (DZI)** within your image management and viewer stacks. This is because we provide [Iris RESTful Server](https://github.com/IrisDigitalPathology/Iris-RESTful-Server) builds and [OpenSeaDragon IrisTileSource](https://github.com/openseadragon/openseadragon/blob/master/src/iristilesource.js) that may be deployed using docker containers from our pre-build images as well as pre-built binaries (for those who do not wish to use containers). We also provide the [examples.restful.irisdigitalpathology.org](https://examples.restful.irisdigitalpathology.org) subdomain as a developer service to the community. **This domain responds directly to Iris RESTful API calls.** Use it to integrate and evaluate your HTTPS implementations with the Iris RESTful API, utilizing example Iris test slide files and accelerating your development process. See [JavaScript](#javascript) for more information on using Iris Files with web viewers.
+> **Iris files can directly replace deep zoom images (DZI)** in your OpenSeaDragon-based image stacks. Use our [Iris RESTful Server](https://github.com/IrisDigitalPathology/Iris-RESTful-Server) and [OpenSeaDragon IrisTileSource](https://github.com/openseadragon/openseadragon/blob/master/src/iristilesource.js) for seamless integration.
 
 > [!NOTE]
-> **If you are a scanning device manufacturer or programmer developing a custom encoder/decoder, the [Iris File Extension (IFE) repository](https://github.com/IrisDigitalPathology/Iris-File-Extension) will provide the necessary calls to read, write, and validate slide files in accordance with the Iris File Extension Specification.** We are adding **'stream encoding'** support for scanners within this repository. However, if you wish to write your own encoder using the IFE respository instead, the Iris Codec module source files may be a helpful guide in how we choose to read and write to Iris files using the IFE's API.
-
-*If you are a software engineer looking to help with Iris, we are always looking for additional passionate engineers to help in developing the Iris Project.*
+> **For scanner manufacturers**: The [Iris File Extension (IFE) repository](https://github.com/IrisDigitalPathology/Iris-File-Extension) provides the specification for custom encoder/decoder development.
 
 # Example Slides
 The following example WSI files are publically available from AWS S3:
 * [cervix_2x_jpeg.iris (jpeg encoded at 2x downsampling)](https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_2x_jpeg.iris)
 * [cervix_4x_jpeg.iris (jpeg encoded at 4x downsampling)](https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris)
+
+# Encoding Slide Files
+
+The Iris Codec encoder converts WSI files from various vendor formats into optimized Iris format, supporting DICOM (via libdicom) and OpenSlide formats with flexible compression and metadata options.
+
+**Key Features:**
+- **Native DICOM Support**: Byte-stream preservation for lossless quality
+- **Multi-format Support**: SVS, NDPI, VSI, MRXS, and other OpenSlide formats
+- **Modern Compression**: JPEG (default) or AVIF
+- **Automatic Pyramid Derivation**: Generate 2x or 4x, or use source pyramid format.
+- **Privacy Controls**: Metadata stripping and anonymization options
+- **High Performance**: Multi-threaded with real-time progress tracking
+
 # Installation
-The Iris Codec Community module is available via:
-- [Building From Source](README.md#building-from-source)
-- [Python Package Managers](README.md#python)
-- [JavaScript NPM / JSDelivr](README.md#javascript)
 
-The standard module (decoder) requires:
+**Requirements:**
 - C++ 20 Standard Library
-- [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo)
-- [libavif](https://github.com/AOMediaCodec/libavif)
-
-The Encoder (optional) additionally requires:
-- [OpenSlide](https://github.com/openslide/openslide) <p> *We hope to shift away from openslide in future releases*
+- [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo), [libavif](https://github.com/AOMediaCodec/libavif)
+- [OpenSlide](https://github.com/openslide/openslide) and [libdicom](https://github.com/ImagingDataCommons/libdicom) (for encoder only)
 
 ## Building From Source
 
-This library can be built from source using CMake. 
-
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-macos-CI.yml?style=for-the-badge&logo=github&label=MacOS%20CMake%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-linux-CI.yml?style=for-the-badge&logo=github&label=Ubuntu%20CMake%20CI)
-](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-win64-CI.yml?style=for-the-badge&logo=github&label=Windows%20CMake%20CI)
-](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
-
-
-Clone the repository. 
-```sh
-git clone --depth 1 https://github.com/IrisDigitalPathology/Iris-Codec.git
-```
-
-CMake bash build commands. Remember to `-DCMAKE_INSTALL_PREFIX` your chosen install directory if not installing system-wide. Additionally, Iris Codec CMake script is designed to look for and dynamically link [turbo-jpeg](https://github.com/libjpeg-turbo/libjpeg-turbo) and [AVIF](https://github.com/AOMediaCodec/libavif) by default; however, some implementations would rather simply build a self-contained statically linked binary without the need to dynamically load libraries. **In some instances where reliablity is key, this may be the most secure option.** Some architectures, such as iOS require this. To enable static dependency linkage, instead set `-DIRIS_BUILD_DEPENDENCIES=ON`.
- 
+[![MacOS CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-macos-CI.yml?style=for-the-badge&logo=github&label=MacOS)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)
+[![Ubuntu CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-linux-CI.yml?style=for-the-badge&logo=github&label=Ubuntu)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)
+[![Windows CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-win64-CI.yml?style=for-the-badge&logo=github&label=Windows)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
 
 ```shell
-#/bin/bash
-cmake -B build \
-    -D IRIS_BUILD_SHARED=ON \
-    -D IRIS_BUILD_STATIC=ON \
-    -D IRIS_BUILD_ENCODER=ON \
-    -D IRIS_BUILD_DEPENDENCIES=OFF \
-    -D IRIS_BUILD_PYTHON=OFF \
-    -D IRIS_USE_OPENSLIDE=ON \
-    ./Iris-Codec
-cmake --build ./Iris-Codec/build --config Release -j$CPU_COUNT
-cmake --install ./Iris-Codec/build
+git clone --depth 1 https://github.com/IrisDigitalPathology/Iris-Codec.git
+cmake -B build -D IRIS_BUILD_SHARED=ON -D IRIS_BUILD_ENCODER=ON ./Iris-Codec
+cmake --build build --config Release -j$(nproc)
+cmake --install build
 ```
-
-Or Windows
-```bat
-cmake -B build -GNinja ^
-    -D CMAKE_BUILD_TYPE=Release ^
-    -D IRIS_BUILD_SHARED=ON ^
-    -D IRIS_BUILD_STATIC=ON ^
-    -D IRIS_BUILD_ENCODER=ON ^
-    -D IRIS_BUILD_DEPENDENCIES=OFF ^
-    -D IRIS_BUILD_PYTHON=OFF ^
-    -D IRIS_USE_OPENSLIDE=ON ^
-    .\Iris-Codec
-if errorlevel 1 exit 1
-cmake --build .\Iris-Codec\build --config Release
-if errorlevel 1 exit 1
-cmake --install .\Iris-Codec\build
-```
-
- More info on the dependencies lookup and **cross compiling** Iris Codec in the [cmake directory](./cmake/).
 
 
 ## Python
-Iris Codec is available via the Anaconda and PyPi package managers. We prefer the Anaconda enviornment as it includes dynamic libraries if you choose to develop C/C++ applications with Python bindings that dynamically link the C++ Iris-Codec in addition to Python modules. 
-
-> [!NOTE] 
-> In addition to the below package managers, The Python module may also be built from source by setting `-DIRIS_BUILD_PYTHON=ON` in the above [CMake command](README.md#building-from-source).
-
-
-### Anaconda (Conda-Forge)
-[![Static Badge](https://img.shields.io/badge/Feedstock-Iris_Codec-g?style=for-the-badge)
-](https://github.com/conda-forge/Iris-Codec-feedstock) 
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
-[![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
-[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg?style=for-the-badge&color=blue)](https://anaconda.org/conda-forge/iris-codec)
+[![PyPI Version](https://img.shields.io/pypi/v/Iris-Codec?color=blue&style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
+[![Python CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/distribute-pypi.yml?style=for-the-badge&logo=python&label=Python%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/python-CI.yml)
 
-You may configure your conda enviornment in the following way
-```shell
-conda config --add channels conda-forge
-conda install iris-codec
-```
-Or directly install it in a single command
 
 ```shell
-conda install -c conda-forge Iris-Codec 
-```
+# Conda (recommended)
+conda install -c conda-forge iris-codec
 
-or install it with `mamba`:
-```shell
-mamba install iris-codec
-```
-
-### Pip (PyPi)
-[![PyPI - Version](https://img.shields.io/pypi/v/Iris-Codec?color=blue&style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/Iris-Codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Format](https://img.shields.io/pypi/format/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
-[![PyPI - Downloads](https://img.shields.io/pepy/dt/iris-codec?style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
-
-Iris Codec can also be installed via Pip. The Encoder module dynamically links against OpenSlide to re-encode vendor slide files. This may be removed in the future, but it must be installed presently.
-
-```shell
+# PyPI
 pip install iris-codec openslide-bin
 ```
 
-## Javascript
-[![Iris Codec WASM CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/emcmake-wasm-CI.yml?style=for-the-badge&logo=github&label=Iris%20Codec%20WebAssembly%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)
+## JavaScript
 [![NPM Version](https://img.shields.io/npm/v/iris-codec?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/iris-codec)
-[![jsDelivr hits (npm)](https://img.shields.io/jsdelivr/npm/hw/iris-codec?style=for-the-badge&logo=jsDelivr&link=https%3A%2F%2Fcdn.jsdelivr.net%2Fnpm%2Firis-codec%2F)](https://www.jsdelivr.com/package/npm/iris-codec)
+[![jsDelivr](https://img.shields.io/jsdelivr/npm/hm/iris-codec?style=for-the-badge&color=orange&logo=jsdelivr)](https://www.jsdelivr.com/package/npm/iris-codec)
+[![JavaScript CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/emcmake-wasm-CI.yml?style=for-the-badge&logo=javascript&label=JavaScript%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/javascript-CI.yml)
 
-There are two mechanisms by which Iris Codec / Iris slide files can be incorporated into a JavaScript project. Unlike the other builds in this repository, JavaScript implementations rely upon the browser enviornment to perform image decompression. 
+**Option 1: Iris RESTful Server** (recommended for server deployments)
+- Extremely high performance (multi-threaded with dual stack)
+- Server-side serialization with virtual memory mapping
+- Compatible with [OpenSeaDragon IrisTileSource](https://github.com/openseadragon/openseadragon/blob/master/src/iristilesource.js)
 
-The two options are as follows:
-1. <strong>[Iris RESTful Server]()</strong>: This is the most efficient method of streaming image data to a client. This is a <u>**server side serialization**</u> tool. It will map Iris Slides into virtual memory and return image data quickly. This is only compatible with HTTP servers that have a true file system. This solution is very easy to implement using the [OpenSeaDragon IrisTileSource](https://github.com/openseadragon/openseadragon/blob/master/src/iristilesource.js) in about 4 lines of code (see below).
-2. <strong>[Iris-Codec WebAssembly Module](https://www.npmjs.com/package/iris-codec)</strong>: This is a slower method of streaming image data; however it is fully compatible with bucked-based storage solutions such as AWS S3 or Google Cloud Storage. It is slower because it is a <u>**client side serialization**</u> tool that validates and loads the full slide metadata in a series of small HTTP 206 'partial read' responses (including offset tables) upfront; following validation and offset generation however, reads are fast as they use HTTP ranged reads for tile data, hitting the same bucket file over and over again. Because of this limitation, we **STRONGLY** recommend <u>abstracting the metadata for all slides within a case set simultaneously</u> as it requires a small footprint (1-2 MB/slide) and allows for fast access following this file metadata abstraction. 
-
-> [!NOTE] 
-> [Iris RESTful](https://github.com/IrisDigitalPathology/Iris-RESTful-Server) has <u>substantially better performance</u>. The Iris-Codec WebAssembly module is primary useful when image data is stored in low-cost bucket storage where a custom server instance (Irist RESTful) cannot be deployed - AWS S3, for example. If you choose to use this route, we **STRONGLY** recommend <u>loading all slides within a case set simultaneously</u> as the major overhead with this module comes from slide validation and offset table generation. This can even take seconds, but all slides can be loaded simultaneously (ie all slides in a case can should be loaded at once), and only consumes 1-2 MB per slide.
-
-### Installation of Iris RESTful Server
-Please refer to the <strong>[Iris RESTful Server documentation](https://github.com/IrisDigitalPathology/Iris-RESTful-Server?tab=readme-ov-file#deployment-introduction)</strong> for a description of deploying the Iris RESTful Server. The easiest way is through deployment of our [official container images](https://ghcr.io/irisdigitalpathology/iris-restful:latest).
-
-### Installation of Iris-Codec WebAssembly
-When used in a client side system, jsDelivr will distribute the WebAssembly module from NPM. There is no installation needed from you.
+**Option 2: WebAssembly Module** (for client-side/bucket storage)
 ```html
-<!DOCTYPE html>
 <script type="module">
-    import createModule 
-    from 'https://cdn.jsdelivr.net/npm/iris-codec@latest/iris-codec.js';
-    
-    // Compile the WASM module and stall execution until ready
-    const irisCodec = await createModule();
-    console.log("Iris-Codec has been loaded");
-    
-    // ...Your code goes here...
+import createModule from 'https://cdn.jsdelivr.net/npm/iris-codec@latest/iris-codec.js';
+const irisCodec = await createModule();
 </script>
 ```
 
-The general use case is in web applications. If you wish to use it with NodeJS to access remote slides or for node based testing it can be installed from NPM. Please do not try to build a server with this. It is designed for client-side applications and will bottleneck your server.
+> [!NOTE] 
+> RESTful server has substantially better performance. WASM is useful for bucket storage (S3, GCS) where custom servers can't be deployed.
 
-```sh
-npm i iris-codec
+
+
+# API Examples
+
+## Encoder Usage
+
+**Command Line:**
+```shell
+# Basic encoding
+./IrisCodecEncoder -s input.svs -o ./output/ -d use_source
+
+# Advanced options
+./IrisCodecEncoder -s input.dcm -o ./output/ -e AVIF -d 2x -c 8
+
+# Research Example (strip metadata)
+./IrisCodecEncoder -s patient.dcm -o ./research/ -sm -d 4x -c 4
 ```
 
-> [!CAUTION] 
-> Do not use this package from NPM for a server deployment that serves Iris encoded slides. This is a client slide tool and <u>the webassembly module was not designed for use in a server</u> and it will not work well for this purpose. Trust me. If you need a server, <strong>use Iris RESTful server instead</strong>; frankly, it is significantly faster and more robust than what Node will give you for slide tile serving.
+**Available Arguments:**
+- `-h, --help`: Print help text
+- `-s, --source`: File path to the source WSI file (must be compatible with OpenSlide)
+- `-o, --outdir`: Output directory path (encoder names file as XXX.iris based on source filename)
+- `-d, --derive`: Generate lower resolution layers - Options: `2x`, `4x`, or `use-source` (default)
+- `-sm, --strip_metadata`: Strip patient identifiers from encoded metadata
+- `-e, --encoding`: Compression format - `JPEG` (default) or `AVIF`
+- `-c, --concurrency`: Number of threads to use (defaults to all CPU cores)
 
+**Python:**
+```python
+from Iris import Encoder
+result = Encoder.encode_slide_file('input.svs', './output/')
+```
 
+**C++:**
+```cpp
+#include "IrisCodecCore.hpp"
+auto encoder = IrisCodec::create_encoder({.srcFilePath = "input.svs"});
+IrisCodec::dispatch_encoder(encoder);
+```
 
-# Implementations
-We provide introduction implementation examples for the following languages below:
-- [C++ Example API](README.md#c-example-api)
-- [Python Example API](README.md#python-example-api)
-- [JavaScript Example API](README.md#javascript-webassembly-api)
+## Reading Slides
 
-Please refer to the Iris Codec API documentation for a more through explaination.
+**C++:**
+```cpp
+#include <Iris/IrisCodecCore.hpp>
 
-## C++ Example API
-Iris is natively a C++ program and the majority of features will first be supported in C++ followed by the other language bindings as we find time to write bindings. 
+auto slide = open_slide({.filePath = "slide.iris"});
+SlideInfo info;
+get_slide_info(slide, info);
 
-Begin by importing the [Iris Codec Core header](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp); it contains references to the [Iris Codec specific type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecTypes.hpp) as well as the general [Iris Core type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp). 
+// Read tiles
+Iris::Buffer tile = read_slide_tile(SlideTileReadInfo {
+  .slide = slide,
+  .layer = 0,
+  .tile = 0
+});
+```
+
+**Python:**
+```python
+from Iris import Codec
+
+slide = Codec.open_slide('slide.iris')
+result, info = slide.get_info()
+
+# Read tiles
+tile_data = slide.read_slide_tile(layer=0, tile=0)
+```
+
+**JavaScript:**
+```javascript
+import createModule from 'https://cdn.jsdelivr.net/npm/iris-codec@latest/iris-codec.js';
+
+const irisCodec = await createModule();
+const slide = await openIrisSlideAsync(irisCodec, 'https://example.com/slide.iris');
+const info = slide.getSlideInfo();
+```
+
+For complete examples and advanced usage, see the [full documentation](https://github.com/IrisDigitalPathology/Iris-Headers) and [API reference](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp).
+
+# Detailed API Documentation
+
+## C++ Detailed Examples
+
+### Basic Setup and Validation
 ```cpp
 // Import the Iris Codec header
 // This import includes the types header automatically
-#import <filesystem>
-#import <Iris/IrisCodecCore.hpp>
+#include <filesystem>
+#include <Iris/IrisCodecCore.hpp>
 ```
-You may chose to perform your own file system validations and recovery routines. Iris will, however catch all of these (and the main API methods are declared `noexcept`).
+
+You may choose to perform your own file system validations and recovery routines. Iris will, however catch all of these (and the main API methods are declared `noexcept`).
+
 ```cpp
 if (!std::filesystem::exists(file_path)) {
     printf(file_path.string() + " file does not exist\n");
@@ -207,50 +194,57 @@ if (!is_iris_codec_file(file_path.string())) {
     printf(file_path.string() + " is not a valid Iris slide file\n");
     return EXIT_FAILURE;
 }
-IrisResult result = validate_slide (SlideOpenInfo {
+IrisResult result = validate_slide(SlideOpenInfo{
     .filePath = file_path.string()
     // Default values for any undefined parameters
 });
 
 if (result != IRIS_SUCCESS) {
-    printf (result.message);
+    printf(result.message);
     return EXIT_FAILURE;
 }
 ```
- Should an runtime error occur, it will be reported in the form of an `IrisResult` message, as seen in the `IrisResult validate_slide (const SlideOpenInfo&) noexcept;` call. 
- 
- Successful loading of a slide file will return a valid `IrisCodec::Slide` object; failure will return a `nullptr`. 
+
+Should a runtime error occur, it will be reported in the form of an `IrisResult` message, as seen in the `IrisResult validate_slide(const SlideOpenInfo&) noexcept;` call.
+
+### Opening and Reading Slides
+Successful loading of a slide file will return a valid `IrisCodec::Slide` object; failure will return a `nullptr`.
+
 ```cpp
-auto slide = open_slide (SlideOpenInfo {
-    .filePath       = file_path.string(),
-    .context        = nullptr,
-    .writeAccess    = false
+auto slide = open_slide(SlideOpenInfo{
+    .filePath = file_path.string(),
+    .context = nullptr,
+    .writeAccess = false
 });
 if (!slide) return EXIT_FAILURE;
 ```
 
-Once opened, the slide `IrisCodec::SlideInfo` structure can be loaded using the `Result get_slide_info (const Slide&, SlideInfo&) noexcept` call and used as an initialized structure containing all the information needed to navigate the slide file and read elements.
+Once opened, the slide `IrisCodec::SlideInfo` structure can be loaded using the `Result get_slide_info(const Slide&, SlideInfo&) noexcept` call and used as an initialized structure containing all the information needed to navigate the slide file and read elements.
+
 ```cpp
 SlideInfo info;
-IrisResult result = get_slide_info (slide, info);
+IrisResult result = get_slide_info(slide, info);
 if (result != IRIS_SUCCESS) {
-    printf (result.message);
+    printf(result.message);
     return EXIT_FAILURE;
 }
 ```
+
+### Reading Tile Data
 The `SlideTileReadInfo` struct provides a simple mechanism for reading slide image data. The `info.extent` struct is extremely simple to navigate. Please refer to the `struct Extent` type in the [IrisTypes.hpp](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp) core header file for more information about slide extents.
+
 ```cpp
-struct SlideTileReadInfo read_info {
-    .slide                  = slide,
-    .layer                  = 0,
-    .optionalDestination    = NULL, /*wrapper can go here*/
-    .desiredFormat          = Iris::FORMAT_R8G8B8A8,
+struct SlideTileReadInfo read_info{
+    .slide = slide,
+    .layer = 0,
+    .optionalDestination = NULL, /*wrapper can go here*/
+    .desiredFormat = Iris::FORMAT_R8G8B8A8,
 };
 for (auto& layer : info.extent.layers) {
     for (int y_index = 0; y_index < layer.yTiles; ++y_index) {
         for (int x_index = 0; x_index < layer.xTiles; ++x_index) {
             // Read the tile slide tile
-            Iris::Buffer rgba = read_slide_tile (read_info);
+            Iris::Buffer rgba = read_slide_tile(read_info);
             
             // Do something with the tile pixel values in rgba
 
@@ -260,12 +254,16 @@ for (auto& layer : info.extent.layers) {
     }
     read_info.layer++;
 }
-if (optional_buffer) free (optional_buffer);
 ```
-Decompressed slide data can be optionally read into preallocated memory. If the optional destination buffer is insufficiently sized, Iris will instead allocate a new buffer and return that new buffer with the pixel data. 
+> [!NOTE]
+> Iris::Buffer is a reference counted buffer wrapper that can be safely copied will internally manage the memory lifetime. If externally managing memory you can wrap an existing buffer in a weak Iris::Buffer for API compatability but without lifetime management. 
+
+### Advanced Memory Management
+Decompressed slide data can be optionally read into preallocated memory. If the optional destination buffer is insufficiently sized, Iris will instead allocate a new buffer and return that new buffer with the pixel data.
 
 > [!NOTE]
-> If writing into externally managed memory, `Iris::Buffer` should weakly reference the underlying memory using `Wrap_weak_buffer_fom_data()` as strongly referenced `Iris::Buffer` objects deallocate underlying memory on deletion.
+> If writing into externally managed memory, `Iris::Buffer` should weakly reference the underlying memory using `Wrap_weak_buffer_from_data()` as strongly referenced `Iris::Buffer` objects deallocate underlying memory when they pass out of scope.
+
 ```cpp
 // In this example we have some preallocated buffer we want
 // to write our slide pixel data into. A GPU buffer is a great
@@ -274,36 +272,49 @@ char* GPU_DST;
 
 // We will write in R8G8B8A8 format for simplicity
 Iris::Format format = Iris::FORMAT_R8G8B8A8;
-size_t tile_bytes   = 256*256*4; 
-Iris::Buffer wrapper = Wrap_weak_buffer_fom_data (GPU_DST, tile_bytes);
+size_t tile_bytes = 256*256*4; 
+Iris::Buffer wrapper = Wrap_weak_buffer_from_data(GPU_DST, tile_bytes);
 
 // Read the data
-struct SlideTileReadInfo read_info {
-    .slide                  = slide,
-    .optionalDestination    = wrapper,
-    .desiredFormat          = format,
+struct SlideTileReadInfo read_info{
+    .slide = slide,
+    .optionalDestination = wrapper,
+    .desiredFormat = format,
 };
-Buffer result = read_slide_tile (read_info);
+Buffer result = read_slide_tile(read_info);
 
 // If there was insufficient space in the provided
 // destination buffer, a new buffer will be allocated.
 if (wrapper != result) {
-    printf ("Insufficient sized buffer, new buffer was allocated");
+    printf("Insufficient sized buffer, new buffer was allocated");
 }
 ```
-Iris can decompress into different pixel byte orderings and exchange data ownership via the `Iris::Buffer` strength. For more information about the Iris Buffer, which was designed primarily as a networking buffer, please see [IrisBuffer.hpp](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/priv/IrisBuffer.hpp) in the core headers. 
 
-## Python Example API
+### SIMD-Accelerated Format Conversion
+Iris can decompress into different pixel byte orderings and exchange data ownership via the `Iris::Buffer` strength. The codec uses **Google Highway SIMD instructions** for high-performance format conversions, including:
 
+- **Channel Reordering**: RGB ↔ BGR byte swapping using vectorized operations
+- **Alpha Channel Operations**: Adding/removing alpha channels with SIMD acceleration
+- **Format Conversion**: Converting between R8G8B8, B8G8R8, R8G8B8A8, and B8G8R8A8 formats
+- **Tile Downsampling**: 2x and 4x averaging downsampling with vectorized arithmetic
+
+The SIMD implementations automatically adapt to your CPU's capabilities (SSE2, AVX2, AVX-512, ARM NEON) for optimal performance. Format conversions are performed in-place when possible to minimize memory allocation.
+
+For more information about the Iris Buffer, which was designed primarily as a networking buffer, please see [IrisBuffer.hpp](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/priv/IrisBuffer.hpp) and [IrisSIMD.hpp](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/priv/IrisSIMD.hpp)  in the core headers.
+
+## Python Detailed Examples
+
+### Setup and Validation
 Import the Python API and Iris Codec Module.
 
 ```python
-#Import the Iris Codec Module
+# Import the Iris Codec Module
 from Iris import Codec
 slide_path = 'path/to/slide_file.iris'
 ```
 
 Perform a deep validation of the slide file structure. This will navigate the internal offset-chain and check for violations of the IFE standard.
+
 ```python
 result = Codec.validate_slide_path(slide_path)
 if (result.success() == False):
@@ -311,14 +322,18 @@ if (result.success() == False):
 print(f"Slide file '{slide_path}' successfully passed validation")
 ```
 
+### Opening and Reading Slide Information
 Open a slide file. The following conditional will always return True if the slide has already passed validation but you may skip validation and it will return with a null slide object (but without providing the Result debug info).
+
 ```python
 slide = Codec.open_slide(slide_path)
 if (not slide): 
     raise Exception('Failed to open slide file')
 ```
-Get the slide abstraction, read off the slide dimensions, and then print it to the console.  
-```py
+
+Get the slide abstraction, read off the slide dimensions, and then print it to the console.
+
+```python
 # Get the slide abstraction
 result, info = slide.get_info()
 if (result.success() == False):
@@ -332,29 +347,34 @@ for i, layer in enumerate(extent.layers):
     print(f' Layer {i}: {layer.x_tiles} x-tiles, {layer.y_tiles} y-tiles, {layer.scale:0.0f}x scale')
 ```
 
+### Creating Composite Images
 Generate a quick low-power view of the slide using Pillow images.
-```py
+
+```python
 from PIL import Image
-layer_index = 0 # Lowest power layer is layer zero (0)
+layer_index = 0  # Lowest power layer is layer zero (0)
 scale = int(extent.layers[layer_index].scale)
-composite = Image.new('RGBA',(extent.width * scale, extent.height * scale))
+composite = Image.new('RGBA', (extent.width * scale, extent.height * scale))
 layer_extent = extent.layers[layer_index]
 for y in range(layer_extent.y_tiles):
-  for x in range (layer_extent.x_tiles):
-    tile_index = y*layer_extent.x_tiles+x
-    composite.paste(Image.fromarray(slide.read_slide_tile(layer_index, tile_index)),(256*x,256*y))
+    for x in range(layer_extent.x_tiles):
+        tile_index = y*layer_extent.x_tiles+x
+        composite.paste(Image.fromarray(slide.read_slide_tile(layer_index, tile_index)), (256*x, 256*y))
 composite.show()
 ```
-> [!CAUTION]
-> Despite Iris' native fast read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images. I do not recommend doing this above layer 0 or 1 as it may be onerous for PIL.Image 
 
-Investigate the metadata attribute array and view a thumbnail image
-```py
+> [!CAUTION]
+> Despite Iris' native fast read speed, higher resolution layers may take substantial time and memory for Pillow to create a full image as it does not create tiled images. I do not recommend doing this above layer 0 or 1 as it may be onerous for PIL.Image
+
+### Metadata and Associated Images
+Investigate the metadata attribute array and view a thumbnail image:
+
+```python
 result, info = slide.get_info()
 if (result.success() == False):
     raise Exception(f'Failed to read slide information: {result.message()}')
 
-print ("Slide metadata attributes")
+print("Slide metadata attributes")
 for attribute in info.metadata.attributes:
     print(f"{attribute}: {info.metadata.attributes[attribute]}")
 
@@ -364,9 +384,74 @@ if ('thumbnail' in info.metadata.associated_images):
     image.show()
 ```
 
-## JavaScript Iris Codec API
+### Python Encoder API
+The Python module also includes encoding capabilities for converting existing WSI files to the Iris format.
+
+**Basic Encoding:**
+```python
+from Iris import Encoder
+
+# Simple encoding with default settings
+result = Encoder.encode_slide_file(
+    source='path/to/input.svs',
+    outdir='./output/'
+)
+
+if not result.success():
+    raise Exception(f'Encoding failed: {result.message()}')
+print('Encoding completed successfully!')
+```
+
+**Advanced Encoding Options:**
+```python
+from Iris import Encoder, Codec, iris_core
+
+# Encode with custom parameters
+result = Encoder.encode_slide_file(
+    source='path/to/input.svs',
+    outdir='./output/',
+    desired_encoding=Codec.Encoding.TILE_ENCODING_AVIF,  # Use AVIF compression
+    desired_byte_format=iris_core.Format.FORMAT_R8G8B8A8,  # RGBA format
+    strip_metadata=True,  # Remove patient identifiers
+    derivation=Encoder.EncoderDerivation.layer_4x,  # 4x pyramid layers
+    concurrency=8  # Use 8 threads
+)
+```
+
+**DICOM Encoding with Progress Monitoring:**
+```python
+from Iris import Encoder
+import time
+
+# The encode_slide_file function includes built-in progress monitoring
+# It will automatically display a progress bar during encoding
+result = Encoder.encode_slide_file(
+    source='sample.dcm',  # DICOM input with byte-stream preservation
+    outdir='./encoded/',
+    desired_encoding=Encoder.Codec.Encoding.TILE_ENCODING_JPEG
+)
+
+# The function handles progress display automatically:
+# [████████████████████████████████████████] 100.0% ETA: 00:00
+# Iris Encoder completed successfully
+# Slide written to ./encoded/sample.iris
+```
+
+**Available Encoding Parameters:**
+- `source`: Path to input WSI file (required)
+- `outdir`: Output directory (defaults to source directory)
+- `desired_encoding`: Compression format (JPEG or AVIF, default: JPEG)
+- `desired_byte_format`: Pixel format (default: R8G8B8)
+- `strip_metadata`: Remove patient identifiers (default: False)
+- `anonymize`: Anonymize metadata (default: False)
+- `derivation`: Layer derivation strategy (default: layer_2x)
+- `concurrency`: Number of threads (default: CPU count)
+- `codec_context`: Optional codec context for advanced usage
+
+## JavaScript Detailed Examples
+
 ### Iris RESTful API
-Iris RESTful has a simple API (and supports DICOMweb WADO-RS), outlined here, and explained in greater detail within the [Iris RESTful API Exlained Section](https://github.com/IrisDigitalPathology/Iris-RESTful-Server/blob/main/README.md#api-explained). This will return the slide metadata in JSON format and slide tile image data.
+Iris RESTful has a simple API (and supports DICOMweb WADO-RS), outlined here, and explained in greater detail within the [Iris RESTful API Explained Section](https://github.com/IrisDigitalPathology/Iris-RESTful-Server/blob/main/README.md#api-explained). This will return the slide metadata in JSON format and slide tile image data.
 
 ```
 Iris RESTful
@@ -379,9 +464,9 @@ GET <URL>/studies/<study>/series/<UID>/instances/<layer>/metadata
 GET <URL>/studies/<study>/series/<UID>/instances/<layer>/frames/<tile>
 ```
 
-
 ### Iris JavaScript WASM API
-Load the Iris-Codec NPM WebAssembly module via jsDelivr (or download the [latest javascript release](https://github.com/IrisDigitalPathology/Iris-Codec/releases/latest) and include your local copy)
+Load the Iris-Codec NPM WebAssembly module via jsDelivr (or download the [latest javascript release](https://github.com/IrisDigitalPathology/Iris-Codec/releases/latest) and include your local copy):
+
 ```html
 <!DOCTYPE html>
 <script type="module">
@@ -398,7 +483,9 @@ Load the Iris-Codec NPM WebAssembly module via jsDelivr (or download the [latest
 
 Once loaded, you can access image data in a manner similar to the C++ and Python Iris-Codec API. Importantly, the metadata will be returned in IrisCodec::Abstraction C++ types (file metadata abstractions) exposed using Emscripten bindings. Refer to the included TypeScript file for those definitions. Image tile data will be returned as an image (MIME) source and can be used directly as an image data source.
 
-We support callback notation presently as it is both common/well established with JS programmers and easy to construct promises from a callback; however it is more challening to reformat a promise into a callback structure for legacy support. We may simply move to promises in the future. If you wish to wrap file access in promise structures, here are example definitions:
+### Promise Wrapper Functions
+We support callback notation presently as it is both common/well established with JS programmers and easy to construct promises from a callback; however it is more challenging to reformat a promise into a callback structure for legacy support. We may simply move to promises in the future. If you wish to wrap file access in promise structures, here are example definitions:
+
 ```js
 // Wraps Module.validateFileStructure (url, callback) in a Promise
 function validateFileStructureAsync(Module, fileUrl) {
@@ -414,8 +501,9 @@ function validateFileStructureAsync(Module, fileUrl) {
     });
   });
 }
+
 // Wraps Module.openIrisSlide(url, callback) in a Promise
-function openIrisSlideAsync(url) {
+function openIrisSlideAsync(Module, url) {
   return new Promise((resolve, reject) => {
     Module.openIrisSlide(url, slide => {
       if (!slide) {
@@ -426,6 +514,7 @@ function openIrisSlideAsync(url) {
     });
   });
 }
+
 // Wraps slide.getSlideTile(layer, tileIndex, callback) in a Promise
 function getSlideTileAsync(slide, layer, tileIndex) {
   return new Promise((resolve, reject) => {
@@ -440,6 +529,7 @@ function getSlideTileAsync(slide, layer, tileIndex) {
 }
 ```
 
+### Validation and File Opening
 Perform a deep validation of the slide file structure. This will navigate the internal offset-chain and check for violations of the IFE standard. This can be omitted if you are confident of the source.
 
 ```js
@@ -453,7 +543,9 @@ try {
     console.log(`Slide file at ${url} failed validation: ${error}`);
 }
 ```
+
 Open a slide file. The following conditional will succeed without throwing an exception if the slide has already passed validation but you may skip validation to reduce server requests.
+
 ```js
 const irisCodec = await createModule();
 console.log("Iris-Codec has been loaded");
@@ -468,13 +560,16 @@ try {
     console.error(error);
 }
 ```
+
+### Reading Slide Information
 Get the slide abstraction, read off the slide dimensions, and then print it to the console.
+
 ```js
 const irisCodec = await createModule();
 const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris";
 try {
-    await validateFileStructureAsync(irisCodec,url);
-    const slide = await openIrisSlideAsync (irisCodec, url);
+    await validateFileStructureAsync(irisCodec, url);
+    const slide = await openIrisSlideAsync(irisCodec, url);
 
     // Let's get the slide dimensions and print them to the console.
     const info = slide.getSlideInfo();
@@ -483,30 +578,33 @@ try {
     console.log(`There are ${extent.layers.size()} layers comprising the following dimensions:`)
     for (var i = 0; i < extent.layers.size(); i++) {
         const layer = extent.layers.get(i);
-        console.log(`  Layer ${i}: ${layer.xTiles} x-tiles, ${layer.xTiles} y-tiles, ${layer.scale}x scale`);
+        console.log(`  Layer ${i}: ${layer.xTiles} x-tiles, ${layer.yTiles} y-tiles, ${layer.scale}x scale`);
     }
     slide.delete();
 } catch (error) {
     console.error(error);
 }
 ```
-Generate a quick view of the one of the images (`tileImage`) somewhere earlier in the HTML page.
+
+### Single Tile Display
+Generate a quick view of one of the images (`tileImage`) somewhere earlier in the HTML page.
+
 ```html
 <img id="tileImage" width="128" height="128" alt="Loading..." style="border: 1px solid black;"/>
 <!-- ... Somewhere Earlier -->
 <script type="module">
     // Earlier Promise definitions 
     try {
-        await validateFileStructureAsync(irisCodec,url);
-        const slide = await openIrisSlideAsync (irisCodec, url);
+        await validateFileStructureAsync(irisCodec, url);
+        const slide = await openIrisSlideAsync(irisCodec, url);
         const layer = 0;
         const tile = 0;
         const tileData = await getSlideTileAsync(slide, layer, tile);
 
         // Now pass the image off to the 'tileImage' element.
-        const url = URL.createObjectURL(tileData);
+        const objectUrl = URL.createObjectURL(tileData);
         const imgElement = document.getElementById("tileImage");
-        imgElement.src = url;
+        imgElement.src = objectUrl;
 
         // Clean up after the image is loaded
         imgElement.onload = () => {
@@ -516,10 +614,12 @@ Generate a quick view of the one of the images (`tileImage`) somewhere earlier i
     } catch (error) {
         console.error(error);
     }
-    
 </script>
 ```
-Bringing it all together, the following full HTML page source will show a low power view of the image using a tile grid view similar to the above view that Pillow.Images produces in the [Python API example](https://github.com/IrisDigitalPathology/Iris-Codec?tab=readme-ov-file#python-example-api).
+
+### Complete Tile Grid Example
+Bringing it all together, the following full HTML page source will show a low power view of the image using a tile grid view similar to the above view that Pillow.Images produces in the Python API example.
+
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -549,7 +649,8 @@ Bringing it all together, the following full HTML page source will show a low po
   <div id="tileGrid"></div>
 
   <script type="module">
-  import createModule from './iris-codec.js';
+  import createModule from 'https://cdn.jsdelivr.net/npm/iris-codec@latest/iris-codec.js';
+  
   // ————— Helper Promisified APIs —————
   function validateFileStructureAsync(Module, fileUrl) {
     return new Promise((resolve, reject) => {
@@ -572,7 +673,7 @@ Bringing it all together, the following full HTML page source will show a low po
     return new Promise((resolve, reject) => {
       slide.getSlideTile(layer, tileIndex, tile_blob => {
         tile_blob ? resolve(tile_blob)
-                  : reject(new Error("Failed to get tile “" + tileIndex + "”"));
+                  : reject(new Error("Failed to get tile " + tileIndex));
       });
     });
   }
@@ -580,22 +681,22 @@ Bringing it all together, the following full HTML page source will show a low po
   // ————— Main Entry Point —————
   (async () => {
     const irisCodec = await createModule();
-    const url       = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris";
+    const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris";
     try {
-      await validateFileStructureAsync(irisCodec,url);
+      await validateFileStructureAsync(irisCodec, url);
       const slide = await openIrisSlideAsync(irisCodec, url);
 
       // 1) Read layer info
-      const layer         = 1;
-      const info          = slide.getSlideInfo();
-      const extent        = info.extent.layers.get(layer);
+      const layer = 1;
+      const info = slide.getSlideInfo();
+      const extent = info.extent.layers.get(layer);
       const { xTiles, yTiles } = extent;
-      const nTiles        = xTiles * yTiles;
+      const nTiles = xTiles * yTiles;
 
       // 2) Configure the grid container
       const gridEl = document.getElementById("tileGrid");
       gridEl.style.gridTemplateColumns = `repeat(${xTiles}, 128px)`;
-      gridEl.style.gridTemplateRows    = `repeat(${yTiles}, 128px)`;
+      gridEl.style.gridTemplateRows = `repeat(${yTiles}, 128px)`;
 
       // 3) Fetch all tiles in parallel (or chunked if you prefer)
       const startAll = performance.now();
@@ -633,7 +734,3 @@ Bringing it all together, the following full HTML page source will show a low po
 </body>
 </html>
 ```
-<!-- result, info = slide.get_info()
-if (result.success() == False):
-    raise Exception(f'Failed to read slide information: {result.message()}') -->
-
