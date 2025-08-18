@@ -296,9 +296,9 @@ emscripten::val _validateFileStructure(const std::string& url) {
 emscripten::val _openSlide(const std::string& url) {
     size_t file_size = get_file_size_async(url.c_str());
     if (file_size < Serialization::FILE_HEADER::HEADER_SIZE)
-        return emscripten::val()
+        return emscripten::val();
     if (!confirm_range_support(url.c_str(), Serialization::FILE_HEADER::HEADER_SIZE))
-        return emscripten::val()
+        return emscripten::val();
     auto file = abstract_file_structure(url, file_size);
     return emscripten::val(std::make_shared<__INTERNAL__Slide>(url,file));
 }
