@@ -103,7 +103,6 @@ target_include_directories (
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_link_options(
         iris-codec PRIVATE
-        -sFETCH
         -sASYNCIFY
         -sEXPORT_ES6=1
         -sMODULARIZE=1
@@ -119,7 +118,6 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 else () 
     target_link_options(
         iris-codec PRIVATE
-        -sFETCH
         -sASYNCIFY
         -sEXPORT_ES6=1
         -sMODULARIZE=1
