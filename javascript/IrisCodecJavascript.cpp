@@ -7,22 +7,131 @@
  * abstract the file and the Emscripten Bindings to allow JS access.
  * @version 2025.2.0
  * @date 2025-08-09
- * 
+ *
  * @copyright Copyright Iris Developers (c) 2025
- * 
+ *
  */
 #include "IrisFileExtension.hpp"
 
 #include <emscripten/emscripten.h>
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
-#include <emscripten/fetch.h>
 #include <string>
 #include <iostream>
 #include <sstream>
 #include <map>
 #include <set>
 
+// Direct JavaScript fetch function using EM_JS
+EM_JS(emscripten::EM_VAL, fetch_tile_data, (const char* url_ptr, const char* range_header_ptr, const char* mime_type_ptr), {
+  const url = UTF8ToString(url_ptr);
+  const rangeHeader = UTF8ToString(range_header_ptr);
+  const mimeType = UTF8ToString(mime_type_ptr);
+  
+  // Create a Promise that fetches the data
+  const promise = fetch(url, {
+    headers: {'Range': rangeHeader}
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+    }
+    return response.arrayBuffer();
+  })
+  .then(buffer => {
+    const uint8Array = new Uint8Array(buffer);
+    
+    // Create the Blob with the correct MIME type
+    const blob = new Blob([uint8Array], { type: mimeType });
+    return blob;
+  })
+  .catch(error => {
+    console.error("Fetch failed:", error);
+    throw error;
+  });
+  
+  return Emval.toHandle(promise);
+});
+
+// HEAD request to get file size
+EM_ASYNC_JS(size_t, get_file_size_async, (const char* url), {
+    const urlString = UTF8ToString(url);
+    
+    try {
+        const response = await fetch(urlString, { method: 'HEAD' });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const contentLength = response.headers.get('content-length');
+        if (!contentLength) {
+            throw new Error('Content-Length header not found');
+        }
+        
+        const fileSize = parseInt(contentLength, 10);
+        return fileSize;
+        
+    } catch (error) {
+        console.error('[JS] Error getting file size:', error);
+        return 0; // Return 0 to indicate error
+    }
+});
+
+// Range read test to confirm server supports range requests
+EM_ASYNC_JS(bool, confirm_range_support, (const char* url, int header_size), {
+    const urlString = UTF8ToString(url);
+    const headerSize = header_size;
+    
+    try {
+        // Create an AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
+        
+        const response = await fetch(urlString, {
+            method: 'GET',
+            headers: {
+                'Range': `bytes=0-${headerSize - 1}`
+            },
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Check if server supports range requests (should return 206 Partial Content)
+        if (response.status !== 206) {
+            console.error('[JS] Server does not support range requests, status:', response.status);
+            return false;
+        }
+        
+        // Get the response data
+        const arrayBuffer = await response.arrayBuffer();
+        
+        // Validate the arrayBuffer
+        if (!arrayBuffer || !(arrayBuffer instanceof ArrayBuffer)) {
+            console.error(`[JS] Invalid response: arrayBuffer is not a valid ArrayBuffer`);
+            return false;
+        }
+        
+        const actualSize = arrayBuffer.byteLength;
+
+        // Confirm we got exactly the number of bytes we requested
+        if (actualSize !== headerSize) {
+            console.error(`[JS] Expected ${headerSize} bytes, got ${actualSize} bytes`);
+            return false;
+        }
+        
+        return true;
+        
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.error('[JS] Range request timed out after 1 second');
+        } else {
+            console.error('[JS] Error confirming range support:', error);
+        }
+        return false;
+    }
+});
 // Convenience Serialization functions
 // MARK: - SERIALIZATION HELPER FUNCTIONS
 namespace Iris {
@@ -71,71 +180,9 @@ inline void SERALIZE_SLIDE_EXTENT (const Extent &extent, std::stringstream& stre
 }
 } // END IRIS namespace
 
-// MARK: - EMSCRIPTEN FETCH HELPER FUNCTIONS
-using namespace emscripten;
-/** Fetch is a C++ wrapper to allow access to std::function
- *  which is significantly more robust in terms of variable/state capture
- *  than the C-functon-pointer counterpart. It's annoying I have to
- *  do this but that's the cost of some C libraries.
- */
-struct Fetch {
-    std::function<void(emscripten_fetch_t*)> _onSuccess = NULL;
-    std::function<void(emscripten_fetch_t*)> _onFailure = NULL;
-    Fetch               (void){}
-    Fetch               (const Fetch&) = delete;
-    Fetch operator =    (const Fetch&) = delete;
-};
-inline void ON_SUCCESS (emscripten_fetch_t*f) {
-    auto fetch = static_cast<Fetch*>(f->userData);
-    if (fetch->_onSuccess) fetch->_onSuccess(f);
-    emscripten_fetch_close(f);
-    delete fetch;
-}
-inline void ON_FAILURE (emscripten_fetch_t*f) {
-    auto fetch = static_cast<Fetch*>(f->userData);
-    if (fetch->_onFailure) fetch->_onFailure(f);
-    emscripten_fetch_close(f);
-    delete fetch;
-}
-inline std::vector<std::string> PARSE_RESPONSE_HEADERS (emscripten_fetch_t*f)
-{
-    std::vector<std::string> response_headers;
-    std::vector<char> _headers (emscripten_fetch_get_response_headers_length(f)+1);
-    emscripten_fetch_get_response_headers(f, _headers.data(), _headers.size());
-    char** entries = emscripten_fetch_unpack_response_headers(_headers.data());
-    if (!entries) throw std::runtime_error
-        ("HTTP HEAD response for file size did not contain headers");
-    
-    for (char** current_entry = entries; *current_entry != nullptr; ++current_entry) {
-        response_headers.push_back([current_entry]() -> std::string {
-            std::string entry (*current_entry);
-            std::transform(entry.begin(), entry.end(), entry.begin(), []
-                           (unsigned char c){return std::tolower(c);});
-            return entry;
-        }());
-    } emscripten_fetch_free_unpacked_response_headers(entries);
-    return response_headers;
-}
-inline size_t PARSE_REMOTE_FILE_SIZE (emscripten_fetch_t *f)
-{
-    auto response_headers = PARSE_RESPONSE_HEADERS(f);
-    size_t file_size = 0;
-    for (auto _entry = response_headers.begin();
-         _entry != response_headers.end(); ++_entry)
-        if (_entry->compare("content-length") == 0 &&
-            _entry+1 != response_headers.end()) {
-            auto& entry = *++_entry;
-            entry.erase(entry.find_last_not_of(" \t\r\n")+1);
-            file_size = std::stoull(entry);
-            break;
-        }
-    if (!file_size) throw std::runtime_error
-        ("Content-Length header not found");
-    return file_size;
-}
-
 // MARK: - IRIS CODEC JavaScript SLIDE WRAPPER
 namespace IrisCodec {
+using namespace emscripten;
 class __INTERNAL__Slide {
     const std::string               _url;
     const Abstraction::File         _abstraction;
@@ -182,156 +229,78 @@ public:
         stream.seekp(-1,stream.cur) << "}";
         return stream.str();
     }
-    void get_slide_tile (uint32_t layer, uint32_t tile_indx, emscripten::val onDone) {
-        // Pull the extent and check that the layer in within info
-        auto& layers = _abstraction.tileTable.layers;
-        if (layer >= layers.size()) throw std::runtime_error
-            ("Requested layer("+ std::to_string(layer) +") is out of bounds");
-        
-        // Pull the layer extent and check that the tile is within info
-        auto& tiles = layers[layer];
-        if (tile_indx >= tiles.size()) throw std::runtime_error
-            ("Requested tile("+ std::to_string(tile_indx) +") is out of layer "+std::to_string(layer)+" bounds");
-        
-        // Get the entry information (offset and size)
-        auto& entry     = tiles[tile_indx];
-                
-        auto fetch = new Fetch ();
-        fetch->_onSuccess = [this,onDone](emscripten_fetch_t* f){
-            if (f && (f->status == 206 || f->status == 200));
-            else throw std::runtime_error
-                (std::string("Fetch failed with code (HTTP ") +
-                 std::to_string(f->status) +
-                 "): "+ f->statusText);
-            // Create a Uint8Array view of the fetched data
-            val uint8_array_view = emscripten::val(emscripten::typed_memory_view(f->numBytes, f->data));
+    emscripten::val get_slide_tile (uint32_t layer, uint32_t tile_indx) {
+        try {
+            // Pull the extent and check that the layer is within bounds
+            auto& layers = _abstraction.tileTable.layers;
+            if (layer >= layers.size()) throw std::runtime_error
+                ("Requested layer("+ std::to_string(layer) +") is out of bounds");
             
-            // Create a JavaScript Array containing the Uint8Array
-            val js_array = val::array();
-            js_array.call<void>("push", uint8_array_view);
+            // Pull the layer extent and check that the tile is within bounds
+            auto& tiles = layers[layer];
+            if (tile_indx >= tiles.size()) throw std::runtime_error
+                ("Requested tile("+ std::to_string(tile_indx) +") is out of layer "+std::to_string(layer)+" bounds");
             
-            // Create the Blob object with type 'image/jpeg'
-            val options = val::object();
-            options.set("type", SERIALIZE_ENCODING(_abstraction.tileTable.encoding));
-            val blob = val::global("Blob").new_(js_array, options);
+            // Get the entry information (offset and size)
+            auto& entry = tiles[tile_indx];
             
-            // Pass the Blob object to the JavaScript onDone callback
-            onDone(blob);
-        };
-        fetch->_onFailure = [layer, tile_indx, onDone](emscripten_fetch_t* f){
-            std::cerr   << "[ERROR] Failed to fetch tile data for layer "
-                        << layer << ", tile " << tile_indx << "\n";
-            onDone(val::undefined());
-        };
-    
-        std::string range_header = "bytes="
-            + std::to_string(entry.offset) + "-"
-            + std::to_string(entry.offset+entry.size-1);
-        std::vector<const char*> requestHeaders = {
-            "Range", range_header.c_str(),
-            nullptr
-        };
-        emscripten_fetch_attr_t attr;
-        emscripten_fetch_attr_init(&attr);
-        strcpy(attr.requestMethod, "GET");
-        attr.requestHeaders = requestHeaders.data();
-        attr.userData = fetch;
-        // Set the callbacks
-        attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
-        attr.onsuccess = ON_SUCCESS;
-        attr.onerror = ON_FAILURE;
-        emscripten_fetch(&attr, this->_url.c_str());
-        // Return immediately
+            // Get the encoding type as a string - make sure it's null-terminated
+            std::string mime_str;
+            switch (_abstraction.tileTable.encoding) {
+                case IrisCodec::TILE_ENCODING_IRIS:  mime_str = "image/iris"; break;
+                case IrisCodec::TILE_ENCODING_JPEG:  mime_str = "image/jpeg"; break;
+                case IrisCodec::TILE_ENCODING_AVIF:  mime_str = "image/avif"; break;
+                default:                             mime_str = "application/octet-stream"; break;
+            }
+            std::string range_header = "bytes="
+                + std::to_string(entry.offset) + "-"
+                + std::to_string(entry.offset+entry.size-1);
+            
+            // Use direct EM_JS fetch function
+            emscripten::EM_VAL promise_handle = fetch_tile_data(
+                _url.c_str(),
+                range_header.c_str(),
+                mime_str.c_str()
+            );
+            
+            // Convert EM_VAL to emscripten::val
+            emscripten::val promise = emscripten::val::take_ownership(promise_handle);
+            
+            return promise;
+            
+        } catch (const std::exception& e) {
+            std::cerr << "[C++] Exception in get_slide_tile: " << e.what() << std::endl;
+            throw;
+        } catch (...) {
+            std::cerr << "[C++] Unknown exception in get_slide_tile" << std::endl;
+            throw;
+        }
     }
 };
-static void CONFIRM_RANGE_READS (const std::string &url, const emscripten::val &onDone, std::function<void()>fn)
-{
-    auto fetch = new Fetch ();
-    fetch->_onSuccess = [url, onDone, fn](emscripten_fetch_t*f)
+emscripten::val _validateFileStructure(const std::string& url) {
+    size_t file_size = get_file_size_async(url.c_str());
+    if (file_size < Serialization::FILE_HEADER::HEADER_SIZE)
     {
-        if (!f || f->status != 206) {
-            onDone(val(Iris::Result(Iris::IRIS_FAILURE,
-            (f?"Ranged-read test failed. Ensure your server supports streaming (HTTP "+
-             std::to_string(f->status)+"):"+f->statusText:
-             "Ranged-read test failed. Ensure your server supports streaming"))));
-            return; }
-        fn();
-    };
-    fetch->_onFailure = [onDone](emscripten_fetch_t* f){
-        std::cerr   << "[ERROR] Failed ranged-read test"
-        << "Failed Ranged-read test.\n";
-        onDone(val(Iris::Result(Iris::IRIS_FAILURE,
-            "Ranged-read test failed. Ensure your server supports HTTP streaming")));
-    };
-    const std::string range_header = "bytes=0-"
-        + std::to_string(Serialization::FILE_HEADER::HEADER_SIZE);
-    const std::vector<const char*> requestHeaders = {
-        "Range", range_header.c_str(),
-        nullptr
-    };
-    emscripten_fetch_attr_t attr;
-    emscripten_fetch_attr_init(&attr);
-    strcpy(attr.requestMethod, "GET");
-    attr.userData       = fetch;
-    attr.requestHeaders = requestHeaders.data();
-    attr.attributes     = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
-    attr.onsuccess      = ON_SUCCESS;
-    attr.onerror        = ON_FAILURE;
-    attr.timeoutMSecs   = 1000;
-    emscripten_fetch(&attr, url.c_str());
-    // Return immediately
-}
-static void FETCH_FILE_SIZE (const std::string &url, const emscripten::val &onDone, std::function<void(size_t file_size)>fn)
-{
-    auto fetch = new Fetch ();
-    fetch->_onSuccess = [url, onDone, fn](emscripten_fetch_t*f)
+        return emscripten::val
+        (Result(Iris::IRIS_VALIDATION_FAILURE,
+        "The hosted file is not an Iris slide file."));
+    }
+    if (!confirm_range_support(url.c_str(), Serialization::FILE_HEADER::HEADER_SIZE))
     {
-        if (!f || f->status != 200) {
-            onDone(val(Iris::Result(Iris::IRIS_FAILURE,
-            (f?"Failed to fetch file size (HTTP "+std::to_string(f->status)+"):"+f->statusText:
-             "Failed to fetch file size: invalid response structure (emscripten-fetch error)"))));
-            return; }
-        size_t file_size = PARSE_REMOTE_FILE_SIZE (f);
-        fn(file_size);
-    };
-    fetch->_onFailure = [onDone](emscripten_fetch_t* f){
-        std::cerr   << "[ERROR] Failed to validate file structure: "
-        << "Failed to perform HEAD request.\n";
-        onDone(val(Iris::Result(Iris::IRIS_FAILURE,
-                    f?"Failed to fetch file size (HTTP "+std::to_string(f->status)+"):"+f->statusText:
-                     "Failed to fetch file size: invalid response structure (emscripten-fetch error)")));
-                    return;
-    };
-    
-    emscripten_fetch_attr_t attr;
-    emscripten_fetch_attr_init(&attr);
-    strcpy(attr.requestMethod, "HEAD");
-    attr.userData   = fetch;
-    attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
-    attr.onsuccess  = ON_SUCCESS;
-    attr.onerror    = ON_FAILURE;
-    emscripten_fetch(&attr, url.c_str());
-    // Return immediately
+        return emscripten::val
+        (Result(Iris::IRIS_FAILURE,
+        "The server hosting the slide file does not support Ranged Reads."));
+    }
+    return emscripten::val(validate_file_structure(url, file_size));
 }
-void _validateFileStructure(const std::string& url, emscripten::val onDone) {
-    FETCH_FILE_SIZE (url, onDone, [url, onDone](size_t file_size){
-        CONFIRM_RANGE_READS(url, onDone, [url, onDone, file_size](){
-            // Validate the remote file structure
-            auto result = validate_file_structure(url, file_size);
-            // Pass the result back to JavaScript
-            onDone(val(result));
-        });
-    });
-}
-void _openSlide(const std::string& url, emscripten::val onDone) {
-    FETCH_FILE_SIZE (url, onDone, [url, onDone](size_t file_size){
-        CONFIRM_RANGE_READS(url, onDone, [url, onDone, file_size](){
-            // Abstract the file structure
-            auto file = abstract_file_structure(url, file_size);
-            // And return the new slide abstraction structure
-            onDone(val(std::make_shared<__INTERNAL__Slide>(url,file)));
-        });
-    });
+emscripten::val _openSlide(const std::string& url) {
+    size_t file_size = get_file_size_async(url.c_str());
+    if (file_size < Serialization::FILE_HEADER::HEADER_SIZE)
+        return emscripten::val()
+    if (!confirm_range_support(url.c_str(), Serialization::FILE_HEADER::HEADER_SIZE))
+        return emscripten::val()
+    auto file = abstract_file_structure(url, file_size);
+    return emscripten::val(std::make_shared<__INTERNAL__Slide>(url,file));
 }
 } // END IRIS_CODEC
 
@@ -339,6 +308,7 @@ void _openSlide(const std::string& url, emscripten::val onDone) {
 // MARK: - EMSCRIPTEN BINDINGS
 // BEGIN BINDINGS
 EMSCRIPTEN_BINDINGS(iris_codec) {
+    using namespace emscripten;
     class_<std::set<std::string>>("StringSet")
         .function("has", +[](std::set<std::string>& m, std::string key){
             return m.find(key) == m.end() ? false : true;

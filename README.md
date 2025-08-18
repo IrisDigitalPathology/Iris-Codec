@@ -57,8 +57,8 @@ cmake --install build
 
 
 ## Python
-[![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg?style=for-the-badge)](https://anaconda.org/conda-forge/iris-codec) 
-[![PyPI Version](https://img.shields.io/pypi/v/Iris-Codec?color=blue&style=for-the-badge)](https://pypi.org/project/Iris-Codec/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg?style=for-the-badge&logo=anaconda)](https://anaconda.org/conda-forge/iris-codec) 
+[![PyPI Version](https://img.shields.io/pypi/v/Iris-Codec?color=blue&style=for-the-badge&logo=pypi)](https://pypi.org/project/Iris-Codec/)
 [![Python CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/distribute-pypi.yml?style=for-the-badge&logo=python&label=Python%20CI)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/python-CI.yml)
 
 
@@ -88,8 +88,8 @@ const irisCodec = await createModule();
 </script>
 ```
 
-> [!NOTE] 
-> RESTful server has substantially better performance. WASM is useful for bucket storage (S3, GCS) where custom servers can't be deployed.
+> [!IMPORTANT] 
+> RESTful server has substantially better performance. WASM is useful for bucket storage (S3, GCS) where custom servers can't be deployed. **There is a substantial performance cost to client side deserialization relative to IrisRESTful.** This WASM API is a unique feature of Iris but is not our preferred method of HTTP streaming.
 
 
 
@@ -164,10 +164,16 @@ tile_data = slide.read_slide_tile(layer=0, tile=0)
 ```javascript
 import createModule from 'https://cdn.jsdelivr.net/npm/iris-codec@latest/iris-codec.js';
 
-const irisCodec = await createModule();
-const slide = await openIrisSlideAsync(irisCodec, 'https://example.com/slide.iris');
-const info = slide.getSlideInfo();
-```
+(async () => {
+  const irisCodec = await createModule();
+  const validationResult = await irisCodec.validateFileStructure('https://example.com/slide.iris');
+  if (validationResult.flag !== irisCodec.ResultFlag.IRIS_SUCCESS) {
+    throw new Error(`Validation failed: ${validationResult.message}`);
+  }
+
+  const slide = await irisCodec.openIrisSlide('https://example.com/slide.iris');
+  const info = slide.getSlideInfo();
+})();
 
 For complete examples and advanced usage, see the [full documentation](https://github.com/IrisDigitalPathology/Iris-Headers) and [API reference](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp).
 
@@ -483,107 +489,90 @@ Load the Iris-Codec NPM WebAssembly module via jsDelivr (or download the [latest
 
 Once loaded, you can access image data in a manner similar to the C++ and Python Iris-Codec API. Importantly, the metadata will be returned in IrisCodec::Abstraction C++ types (file metadata abstractions) exposed using Emscripten bindings. Refer to the included TypeScript file for those definitions. Image tile data will be returned as an image (MIME) source and can be used directly as an image data source.
 
-### Promise Wrapper Functions
-We support callback notation presently as it is both common/well established with JS programmers and easy to construct promises from a callback; however it is more challenging to reformat a promise into a callback structure for legacy support. We may simply move to promises in the future. If you wish to wrap file access in promise structures, here are example definitions:
 
-```js
-// Wraps Module.validateFileStructure (url, callback) in a Promise
-function validateFileStructureAsync(Module, fileUrl) {
-  return new Promise((resolve, reject) => {
-    Module.validateFileStructure(fileUrl, (result) => {
-        const SUCCESS = Module.ResultFlag.IRIS_SUCCESS.value;
-        if (result.flag.value === SUCCESS) {
-            resolve();
-        } else {
-            // result.message is guaranteed to be a JS string
-            reject(new Error(result.message));
-        }
-    });
-  });
-}
-
-// Wraps Module.openIrisSlide(url, callback) in a Promise
-function openIrisSlideAsync(Module, url) {
-  return new Promise((resolve, reject) => {
-    Module.openIrisSlide(url, slide => {
-      if (!slide) {
-        reject(new Error("Failed to validate"));
-      } else {
-        resolve(slide);
-      }
-    });
-  });
-}
-
-// Wraps slide.getSlideTile(layer, tileIndex, callback) in a Promise
-function getSlideTileAsync(slide, layer, tileIndex) {
-  return new Promise((resolve, reject) => {
-    slide.getSlideTile(layer, tileIndex, tile_image => {
-      if (tile_image) {
-        resolve(tile_image);
-      } else {
-        reject(new Error("Failed to get tile"));
-      }
-    });
-  });
-}
-```
 
 ### Validation and File Opening
 Perform a deep validation of the slide file structure. This will navigate the internal offset-chain and check for violations of the IFE standard. This can be omitted if you are confident of the source.
 
 ```js
-const irisCodec = await createModule();
-console.log("Iris-Codec has been loaded");
-const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_2x_jpeg.iris";
-try {
-    await validateFileStructureAsync(irisCodec, url);
-    console.log(`Slide file at ${url} successfully passed validation`);
-} catch (error) {
-    console.log(`Slide file at ${url} failed validation: ${error}`);
-}
+(async () => {
+  const irisCodec = await createModule();
+  console.log("Iris-Codec has been loaded");
+  const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_2x_jpeg.iris";
+
+  try {
+      const validationResult = await irisCodec.validateFileStructure(url);
+      if (validationResult.flag !== irisCodec.ResultFlag.IRIS_SUCCESS) {
+          throw new Error(`Validation failed: ${validationResult.message}`);
+      }
+      console.log(`Slide file at ${url} successfully passed validation`);
+  } catch (error) {
+      console.log(`Slide file at ${url} failed validation: ${error.message}`);
+  }
+})();
 ```
 
 Open a slide file. The following conditional will succeed without throwing an exception if the slide has already passed validation but you may skip validation to reduce server requests.
 
 ```js
-const irisCodec = await createModule();
-console.log("Iris-Codec has been loaded");
-const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_2x_jpeg.iris";
-try {
-    const slide = await openIrisSlideAsync(irisCodec, url);
+(async () => {
+  const irisCodec = await createModule();
+  console.log("Iris-Codec has been loaded");
+  const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_2x_jpeg.iris";
 
-    // ...Do something with slide
+  try {
+      const validationResult = await irisCodec.validateFileStructure(url);
+      if (validationResult.flag !== irisCodec.ResultFlag.IRIS_SUCCESS) {
+          throw new Error(`Validation failed: ${validationResult.message}`);
+      }
+      
+      const slide = await irisCodec.openIrisSlide(url);
+      if (!slide) {
+          throw new Error("Failed to open slide");
+      }
 
-    slide.delete();
-} catch (error) {
-    console.error(error);
-}
+      // ...Do something with slide
+
+      slide.delete();
+  } catch (error) {
+      console.error(error);
+  }
+})();
 ```
 
 ### Reading Slide Information
 Get the slide abstraction, read off the slide dimensions, and then print it to the console.
 
 ```js
-const irisCodec = await createModule();
-const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris";
-try {
-    await validateFileStructureAsync(irisCodec, url);
-    const slide = await openIrisSlideAsync(irisCodec, url);
+(async () => {
+  const irisCodec = await createModule();
+  const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris";
 
-    // Let's get the slide dimensions and print them to the console.
-    const info = slide.getSlideInfo();
-    const extent = info.extent;
-    console.log(`Slide file ${extent.width} px by ${extent.height}px at lowest resolution layer. The layer extents are as follows:`);
-    console.log(`There are ${extent.layers.size()} layers comprising the following dimensions:`)
-    for (var i = 0; i < extent.layers.size(); i++) {
-        const layer = extent.layers.get(i);
-        console.log(`  Layer ${i}: ${layer.xTiles} x-tiles, ${layer.yTiles} y-tiles, ${layer.scale}x scale`);
-    }
-    slide.delete();
-} catch (error) {
-    console.error(error);
-}
+  try {
+      const validationResult = await irisCodec.validateFileStructure(url);
+      if (validationResult.flag !== irisCodec.ResultFlag.IRIS_SUCCESS) {
+          throw new Error(`Validation failed: ${validationResult.message}`);
+      }
+      
+      const slide = await irisCodec.openIrisSlide(url);
+      if (!slide) {
+          throw new Error("Failed to open slide");
+      }
+
+      // Let's get the slide dimensions and print them to the console.
+      const info = slide.getSlideInfo();
+      const extent = info.extent;
+      console.log(`Slide file ${extent.width} px by ${extent.height}px at lowest resolution layer. The layer extents are as follows:`);
+      console.log(`There are ${extent.layers.size()} layers comprising the following dimensions:`)
+      for (var i = 0; i < extent.layers.size(); i++) {
+          const layer = extent.layers.get(i);
+          console.log(`  Layer ${i}: ${layer.xTiles} x-tiles, ${layer.yTiles} y-tiles, ${layer.scale}x scale`);
+      }
+      slide.delete();
+  } catch (error) {
+      console.error(error);
+  }
+})();
 ```
 
 ### Single Tile Display
@@ -593,27 +582,41 @@ Generate a quick view of one of the images (`tileImage`) somewhere earlier in th
 <img id="tileImage" width="128" height="128" alt="Loading..." style="border: 1px solid black;"/>
 <!-- ... Somewhere Earlier -->
 <script type="module">
-    // Earlier Promise definitions 
-    try {
-        await validateFileStructureAsync(irisCodec, url);
-        const slide = await openIrisSlideAsync(irisCodec, url);
-        const layer = 0;
-        const tile = 0;
-        const tileData = await getSlideTileAsync(slide, layer, tile);
+    import createModule from 'https://cdn.jsdelivr.net/npm/iris-codec@latest/iris-codec.js';
+    
+    (async () => {
+      try {
+          const irisCodec = await createModule();
+          const url = "https://example.com/slide.iris";
+          
+          const validationResult = await irisCodec.validateFileStructure(url);
+          if (validationResult.flag !== irisCodec.ResultFlag.IRIS_SUCCESS) {
+              throw new Error(`Validation failed: ${validationResult.message}`);
+          }
+          
+          const slide = await irisCodec.openIrisSlide(url);
+          if (!slide) {
+              throw new Error("Failed to open slide");
+          }
+          
+          const layer = 0;
+          const tile = 0;
+          const tileBlob = await slide.getSlideTile(layer, tile);
 
-        // Now pass the image off to the 'tileImage' element.
-        const objectUrl = URL.createObjectURL(tileData);
-        const imgElement = document.getElementById("tileImage");
-        imgElement.src = objectUrl;
+          // Now pass the image off to the 'tileImage' element.
+          const objectUrl = URL.createObjectURL(tileBlob);
+          const imgElement = document.getElementById("tileImage");
+          imgElement.src = objectUrl;
 
-        // Clean up after the image is loaded
-        imgElement.onload = () => {
-            URL.revokeObjectURL(objectUrl);
-            slide.delete();
-        };
-    } catch (error) {
-        console.error(error);
-    }
+          // Clean up after the image is loaded
+          imgElement.onload = () => {
+              URL.revokeObjectURL(objectUrl);
+              slide.delete();
+          };
+      } catch (error) {
+          console.error(error);
+      }
+    })();
 </script>
 ```
 
@@ -651,40 +654,21 @@ Bringing it all together, the following full HTML page source will show a low po
   <script type="module">
   import createModule from 'https://cdn.jsdelivr.net/npm/iris-codec@latest/iris-codec.js';
   
-  // ————— Helper Promisified APIs —————
-  function validateFileStructureAsync(Module, fileUrl) {
-    return new Promise((resolve, reject) => {
-      Module.validateFileStructure(fileUrl, (result) => {
-        const SUCCESS = Module.ResultFlag.IRIS_SUCCESS.value;
-        if (result.flag.value === SUCCESS) resolve();
-        else reject(new Error(result.message));
-      });
-    });
-  }
-  function openIrisSlideAsync(Module, url) {
-    return new Promise((resolve, reject) => {
-      Module.openIrisSlide(url, slide => {
-        slide ? resolve(slide)
-              : reject(new Error("Failed to open slide"));
-      });
-    });
-  }
-  function getSlideTileAsync(slide, layer, tileIndex) {
-    return new Promise((resolve, reject) => {
-      slide.getSlideTile(layer, tileIndex, tile_blob => {
-        tile_blob ? resolve(tile_blob)
-                  : reject(new Error("Failed to get tile " + tileIndex));
-      });
-    });
-  }
-  
   // ————— Main Entry Point —————
   (async () => {
     const irisCodec = await createModule();
     const url = "https://irisdigitalpathology.s3.us-east-2.amazonaws.com/example-slides/cervix_4x_jpeg.iris";
     try {
-      await validateFileStructureAsync(irisCodec, url);
-      const slide = await openIrisSlideAsync(irisCodec, url);
+      // Validate file structure
+      const validationResult = await irisCodec.validateFileStructure(url);
+      if (validationResult.flag !== irisCodec.ResultFlag.IRIS_SUCCESS) {
+        throw new Error(`Validation failed: ${validationResult.message}`);
+      }
+      
+      const slide = await irisCodec.openIrisSlide(url);
+      if (!slide) {
+        throw new Error("Failed to open slide");
+      }
 
       // 1) Read layer info
       const layer = 1;
@@ -701,10 +685,10 @@ Bringing it all together, the following full HTML page source will show a low po
       // 3) Fetch all tiles in parallel (or chunked if you prefer)
       const startAll = performance.now();
       const objectUrls = await Promise.all(
-        Array.from({ length: nTiles }, (_, idx) =>
-          getSlideTileAsync(slide, layer, idx)
-            .then(blob => URL.createObjectURL(blob))
-        )
+        Array.from({ length: nTiles }, async (_, idx) => {
+          const blob = await slide.getSlideTile(layer, idx);
+          return URL.createObjectURL(blob);
+        })
       );
       const endAll = performance.now();
       document.getElementById("loadTimeText").textContent =
